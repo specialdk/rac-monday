@@ -867,8 +867,8 @@ app.get('/api/board/:id', async (req, res) => {
         const boardId = req.params.id;
         
         const query = `
-            query($boardId: ID!) {
-                boards(ids: [$boardId]) {
+            query($boardId: [ID!]) {
+                boards(ids: $boardId) {
                     id
                     name
                     description
@@ -879,18 +879,6 @@ app.get('/api/board/:id', async (req, res) => {
                         id
                         title
                         color
-                        items {
-                            id
-                            name
-                            state
-                            column_values {
-                                id
-                                text
-                                title
-                                type
-                                value
-                            }
-                        }
                     }
                     columns {
                         id
@@ -908,11 +896,25 @@ app.get('/api/board/:id', async (req, res) => {
                         name
                         email
                     }
+                    items_page(limit: 25) {
+                        items {
+                            id
+                            name
+                            state
+                            column_values {
+                                id
+                                text
+                                title
+                                type
+                                value
+                            }
+                        }
+                    }
                 }
             }
         `;
 
-        const result = await makeMondayRequest(query, { boardId });
+        const result = await makeMondayRequest(query, { boardId: [boardId] });
         
         res.json({
             success: true,
@@ -970,34 +972,36 @@ app.get('/api/items', async (req, res) => {
     try {
         const query = `
             query {
-                items(limit: 50) {
-                    id
-                    name
-                    state
-                    created_at
-                    updated_at
-                    board {
+                items_page(limit: 50) {
+                    items {
                         id
                         name
-                    }
-                    group {
-                        id
-                        title
-                    }
-                    column_values {
-                        id
-                        text
-                        title
-                        type
-                    }
-                    creator {
-                        id
-                        name
-                    }
-                    updates {
-                        id
-                        body
+                        state
                         created_at
+                        updated_at
+                        board {
+                            id
+                            name
+                        }
+                        group {
+                            id
+                            title
+                        }
+                        column_values {
+                            id
+                            text
+                            title
+                            type
+                        }
+                        creator {
+                            id
+                            name
+                        }
+                        updates {
+                            id
+                            body
+                            created_at
+                        }
                     }
                 }
             }
@@ -1007,8 +1011,8 @@ app.get('/api/items', async (req, res) => {
         
         res.json({
             success: true,
-            items: result.items || [],
-            count: result.items?.length || 0
+            items: result.items_page?.items || [],
+            count: result.items_page?.items?.length || 0
         });
     } catch (error) {
         res.status(500).json({
