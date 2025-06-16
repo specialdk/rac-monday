@@ -790,48 +790,74 @@ app.get('/connection-status', (req, res) => {
     });
 });
 
-// Get all boards - FIXED FOR MEMBER ACCESS
+// Get all boards - FIXED TO USE WORKSPACES
 app.get('/api/boards', async (req, res) => {
     try {
-        // Get boards from workspaces the user has access to
-        const query = `
+        // First get workspaces the user has access to
+        const workspacesQuery = `
             query {
-                boards(limit: 50, order_by: used_at) {
+                workspaces(limit: 10) {
                     id
                     name
                     description
                     state
-                    board_kind
-                    workspace {
-                        id
-                        name
-                    }
-                    owners {
-                        id
-                        name
-                        email
-                    }
-                    groups {
-                        id
-                        title
-                        color
-                    }
                 }
             }
         `;
 
-        const result = await makeMondayRequest(query);
+        const workspacesResult = await makeMondayRequest(workspacesQuery);
+        console.log('🏢 Workspaces found:', workspacesResult.workspaces?.map(w => w.name));
+
+        // Then get boards from each workspace
+        let allBoards = [];
         
-        console.log('📊 Boards API response:', {
-            totalBoards: result.boards?.length || 0,
-            boardNames: result.boards?.map(b => b.name) || []
-        });
+        for (const workspace of workspacesResult.workspaces || []) {
+            try {
+                const boardsQuery = `
+                    query($workspaceId: ID!) {
+                        boards(workspace_ids: [$workspaceId], limit: 50) {
+                            id
+                            name
+                            description
+                            state
+                            board_kind
+                            workspace {
+                                id
+                                name
+                            }
+                            owners {
+                                id
+                                name
+                                email
+                            }
+                            groups {
+                                id
+                                title
+                                color
+                            }
+                        }
+                    }
+                `;
+
+                const boardsResult = await makeMondayRequest(boardsQuery, { workspaceId: workspace.id });
+                
+                if (boardsResult.boards) {
+                    allBoards = [...allBoards, ...boardsResult.boards];
+                    console.log(`📋 Found ${boardsResult.boards.length} boards in workspace "${workspace.name}"`);
+                }
+            } catch (workspaceError) {
+                console.log(`⚠️ Could not access workspace "${workspace.name}":`, workspaceError.message);
+            }
+        }
+        
+        console.log('📊 Total boards found:', allBoards.length);
         
         res.json({
             success: true,
-            boards: result.boards || [],
-            count: result.boards?.length || 0,
-            note: 'Showing all accessible boards (not just owned boards)'
+            boards: allBoards,
+            count: allBoards.length,
+            workspaces: workspacesResult.workspaces?.map(w => w.name) || [],
+            note: 'Retrieved boards from accessible workspaces'
         });
     } catch (error) {
         console.error('❌ Boards API error:', error);
