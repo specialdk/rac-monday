@@ -11,7 +11,7 @@ const MONDAY_CONFIG = {
     apiUrl: 'https://api.monday.com/v2',
     apiToken: process.env.MONDAY_API_TOKEN,
     apiVersion: '2023-04',
-
+    
     // Rate limiting info
     rateLimit: {
         requests: 5000,
@@ -33,6 +33,10 @@ app.use(express.static('public'));
 // Make authenticated GraphQL request to Monday.com
 async function makeMondayRequest(query, variables = {}) {
     try {
+        console.log('📡 Making Monday.com API request...');
+        console.log('🔗 URL:', MONDAY_CONFIG.apiUrl);
+        console.log('🎯 Query:', query.substring(0, 100) + '...');
+        
         const response = await fetch(MONDAY_CONFIG.apiUrl, {
             method: 'POST',
             headers: {
@@ -46,12 +50,28 @@ async function makeMondayRequest(query, variables = {}) {
             })
         });
 
-        const data = await response.json();
+        console.log('📥 Response status:', response.status, response.statusText);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ HTTP Error:', response.status, errorText);
+            throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+        }
 
+        const data = await response.json();
+        console.log('📊 Response data keys:', Object.keys(data));
+        
         if (data.errors) {
+            console.error('❌ GraphQL Errors:', data.errors);
             throw new Error(data.errors.map(e => e.message).join(', '));
         }
 
+        if (!data.data) {
+            console.error('❌ No data in response:', data);
+            throw new Error('No data field in API response');
+        }
+
+        console.log('✅ API request successful');
         return data.data;
     } catch (error) {
         console.error('❌ Monday.com API error:', error);
@@ -62,6 +82,8 @@ async function makeMondayRequest(query, variables = {}) {
 // Test API connection
 async function testMondayConnection() {
     try {
+        console.log('📡 Testing Monday.com API connection...');
+        
         const query = `
             query {
                 me {
@@ -78,10 +100,19 @@ async function testMondayConnection() {
                 }
             }
         `;
-
+        
+        console.log('🔄 Making GraphQL request...');
         const result = await makeMondayRequest(query);
+        
+        console.log('📥 Raw API response:', JSON.stringify(result, null, 2));
+        
+        if (!result || !result.me) {
+            throw new Error('Invalid response from Monday.com API - no user data found');
+        }
+        
         return result;
     } catch (error) {
+        console.error('❌ Monday.com API test failed:', error);
         throw new Error(`Connection test failed: ${error.message}`);
     }
 }
@@ -710,20 +741,33 @@ query {
 // Test connection endpoint
 app.post('/test-connection', async (req, res) => {
     try {
+        console.log('🔍 Testing Monday.com connection...');
+        
         if (!MONDAY_CONFIG.apiToken) {
+            console.error('❌ No API token configured');
             throw new Error('API token not configured. Please set MONDAY_API_TOKEN environment variable.');
         }
 
+        console.log('📡 Making API request to Monday.com...');
         const user = await testMondayConnection();
+        
+        console.log('✅ Monday.com connection successful:', {
+            userId: user.me?.id,
+            userName: user.me?.name,
+            userEmail: user.me?.email
+        });
+        
         res.json({
             success: true,
-            user,
+            user: user.me,
             message: 'Connection successful'
         });
     } catch (error) {
+        console.error('❌ Monday.com connection failed:', error);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: error.message,
+            details: error.stack
         });
     }
 });
@@ -772,7 +816,7 @@ app.get('/api/boards', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-
+        
         res.json({
             success: true,
             boards: result.boards || [],
@@ -790,7 +834,7 @@ app.get('/api/boards', async (req, res) => {
 app.get('/api/board/:id', async (req, res) => {
     try {
         const boardId = req.params.id;
-
+        
         const query = `
             query($boardId: ID!) {
                 boards(ids: [$boardId]) {
@@ -838,7 +882,7 @@ app.get('/api/board/:id', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query, { boardId });
-
+        
         res.json({
             success: true,
             board: result.boards?.[0] || null
@@ -855,7 +899,7 @@ app.get('/api/board/:id', async (req, res) => {
 app.post('/api/create-board', async (req, res) => {
     try {
         const { name, description, boardKind } = req.body;
-
+        
         const mutation = `
             mutation($boardName: String!, $boardKind: BoardKind, $description: String) {
                 create_board(
@@ -877,7 +921,7 @@ app.post('/api/create-board', async (req, res) => {
         };
 
         const result = await makeMondayRequest(mutation, variables);
-
+        
         res.json({
             success: true,
             board: result.create_board
@@ -929,7 +973,7 @@ app.get('/api/items', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-
+        
         res.json({
             success: true,
             items: result.items || [],
@@ -947,7 +991,7 @@ app.get('/api/items', async (req, res) => {
 app.post('/api/create-item', async (req, res) => {
     try {
         const { boardId, itemName, groupId } = req.body;
-
+        
         const mutation = `
             mutation($boardId: ID!, $itemName: String!, $groupId: String) {
                 create_item(
@@ -973,7 +1017,7 @@ app.post('/api/create-item', async (req, res) => {
         };
 
         const result = await makeMondayRequest(mutation, variables);
-
+        
         res.json({
             success: true,
             item: result.create_item
@@ -990,7 +1034,7 @@ app.post('/api/create-item', async (req, res) => {
 app.post('/api/update-item', async (req, res) => {
     try {
         const { itemId, name, columnValues } = req.body;
-
+        
         let mutation = '';
         let variables = {};
 
@@ -1029,7 +1073,7 @@ app.post('/api/update-item', async (req, res) => {
         }
 
         const result = await makeMondayRequest(mutation, variables);
-
+        
         res.json({
             success: true,
             item: result.change_simple_column_value || result.change_multiple_column_values
@@ -1068,7 +1112,7 @@ app.get('/api/users', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-
+        
         res.json({
             success: true,
             users: result.users || [],
@@ -1101,7 +1145,7 @@ app.get('/api/teams', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-
+        
         res.json({
             success: true,
             teams: result.teams || [],
@@ -1132,7 +1176,7 @@ app.get('/api/activity', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-
+        
         res.json({
             success: true,
             logs: result.activity_logs || [],
@@ -1183,7 +1227,7 @@ app.get('/api/updates', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-
+        
         res.json({
             success: true,
             updates: result.updates || [],
@@ -1201,7 +1245,7 @@ app.get('/api/updates', async (req, res) => {
 app.post('/api/create-update', async (req, res) => {
     try {
         const { itemId, text } = req.body;
-
+        
         const mutation = `
             mutation($itemId: ID!, $body: String!) {
                 create_update(
@@ -1221,7 +1265,7 @@ app.post('/api/create-update', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(mutation, { itemId, body: text });
-
+        
         res.json({
             success: true,
             update: result.create_update
@@ -1262,12 +1306,12 @@ app.get('/api/stats', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-
+        
         // Calculate statistics
         const boards = result.boards || [];
         const users = result.users || [];
         const teams = result.teams || [];
-
+        
         const stats = {
             boards: {
                 total: boards.length,
@@ -1278,9 +1322,9 @@ app.get('/api/stats', async (req, res) => {
             },
             items: {
                 total: boards.reduce((sum, board) => sum + (board.items?.length || 0), 0),
-                active: boards.reduce((sum, board) =>
+                active: boards.reduce((sum, board) => 
                     sum + (board.items?.filter(item => item.state === 'active').length || 0), 0),
-                done: boards.reduce((sum, board) =>
+                done: boards.reduce((sum, board) => 
                     sum + (board.items?.filter(item => item.state === 'done').length || 0), 0)
             },
             users: {
@@ -1293,7 +1337,7 @@ app.get('/api/stats', async (req, res) => {
                 total: teams.length
             }
         };
-
+        
         res.json({
             success: true,
             statistics: stats,
@@ -1324,7 +1368,7 @@ app.get('/api/logs', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-
+        
         res.json({
             success: true,
             logs: result.activity_logs || [],
@@ -1342,13 +1386,13 @@ app.get('/api/logs', async (req, res) => {
 app.post('/api/custom-query', async (req, res) => {
     try {
         const { query, variables } = req.body;
-
+        
         if (!query) {
             throw new Error('Query is required');
         }
-
+        
         const result = await makeMondayRequest(query, variables || {});
-
+        
         res.json({
             success: true,
             data: result,
@@ -1414,7 +1458,7 @@ app.listen(port, () => {
     console.log(`📊 Dashboard: http://localhost:${port}`);
     console.log(`🔗 GraphQL API: ${MONDAY_CONFIG.apiUrl}`);
     console.log(`🎯 Ready for Monday.com integration!`);
-
+    
     if (!MONDAY_CONFIG.apiToken) {
         console.warn('⚠️  Please set MONDAY_API_TOKEN environment variable');
         console.warn('📋 Get your token from: https://monday.com → Profile → Developer → My Access Tokens');
