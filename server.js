@@ -1657,3 +1657,518 @@ app.listen(port, () => {
         console.warn('📋 Get your token from: https://monday.com → Profile → Developer → My Access Tokens');
     }
 });
+// PRIVATE BOARDS EXTENSION - Add this to the END of your server.js file
+
+// Get all boards including private ones - Enhanced endpoint
+app.get('/api/boards-all', async (req, res) => {
+    try {
+        console.log('🔍 Fetching ALL boards (public + private)...');
+        
+        let allBoards = [];
+        
+        // Method 1: Try to get all boards directly (works for boards you own/have access to)
+        try {
+            const allBoardsQuery = `
+                query {
+                    boards(limit: 200) {
+                        id
+                        name
+                        description
+                        state
+                        board_kind
+                        permissions
+                        workspace {
+                            id
+                            name
+                        }
+                        owners {
+                            id
+                            name
+                            email
+                        }
+                        groups {
+                            id
+                            title
+                            color
+                        }
+                        subscribers {
+                            id
+                            name
+                        }
+                    }
+                }
+            `;
+            
+            const directResult = await makeMondayRequest(allBoardsQuery);
+            allBoards = directResult.boards || [];
+            console.log(`📋 Direct method found ${allBoards.length} boards`);
+            
+        } catch (directError) {
+            console.log('⚠️ Direct boards query failed:', directError.message);
+        }
+        
+        // Method 2: Get boards from workspaces (including private workspaces)
+        try {
+            const workspacesQuery = `
+                query {
+                    workspaces(limit: 50) {
+                        id
+                        name
+                        description
+                        state
+                        kind
+                    }
+                }
+            `;
+            
+            const workspacesResult = await makeMondayRequest(workspacesQuery);
+            console.log('🏢 Available workspaces:', workspacesResult.workspaces?.map(w => `${w.name} (${w.kind})`));
+            
+            for (const workspace of workspacesResult.workspaces || []) {
+                try {
+                    const workspaceBoardsQuery = `
+                        query($workspaceId: ID!) {
+                            boards(workspace_ids: [$workspaceId], limit: 100) {
+                                id
+                                name
+                                description
+                                state
+                                board_kind
+                                permissions
+                                workspace {
+                                    id
+                                    name
+                                }
+                                owners {
+                                    id
+                                    name
+                                    email
+                                }
+                                groups {
+                                    id
+                                    title
+                                    color
+                                }
+                            }
+                        }
+                    `;
+                    
+                    const workspaceBoards = await makeMondayRequest(workspaceBoardsQuery, { workspaceId: workspace.id });
+                    
+                    if (workspaceBoards.boards && workspaceBoards.boards.length > 0) {
+                        // Add boards that aren't already in our list
+                        const newBoards = workspaceBoards.boards.filter(wb => 
+                            !allBoards.some(ab => ab.id === wb.id)
+                        );
+                        allBoards = [...allBoards, ...newBoards];
+                        console.log(`📋 Workspace "${workspace.name}": found ${workspaceBoards.boards.length} boards (${newBoards.length} new)`);
+                    }
+                    
+                } catch (workspaceError) {
+                    console.log(`⚠️ Could not access workspace "${workspace.name}":`, workspaceError.message);
+                }
+            }
+            
+        } catch (workspaceError) {
+            console.log('⚠️ Workspace enumeration failed:', workspaceError.message);
+        }
+        
+        // Method 3: Try to get boards you're subscribed to
+        try {
+            const myBoardsQuery = `
+                query {
+                    me {
+                        id
+                        name
+                    }
+                }
+            `;
+            
+            const meResult = await makeMondayRequest(myBoardsQuery);
+            
+            if (meResult.me?.id) {
+                // Get boards where current user is owner or subscriber
+                const userBoardsQuery = `
+                    query {
+                        boards(limit: 200) {
+                            id
+                            name
+                            description
+                            state
+                            board_kind
+                            permissions
+                            workspace {
+                                id
+                                name
+                            }
+                            owners {
+                                id
+                                name
+                                email
+                            }
+                            subscribers {
+                                id
+                                name
+                            }
+                            groups {
+                                id
+                                title
+                                color
+                            }
+                        }
+                    }
+                `;
+                
+                const userResult = await makeMondayRequest(userBoardsQuery);
+                const userBoards = userResult.boards || [];
+                
+                // Filter for boards where user is owner or subscriber
+                const myBoards = userBoards.filter(board => 
+                    board.owners?.some(owner => owner.id === meResult.me.id) ||
+                    board.subscribers?.some(sub => sub.id === meResult.me.id)
+                );
+                
+                // Add any new boards
+                const newUserBoards = myBoards.filter(ub => 
+                    !allBoards.some(ab => ab.id === ub.id)
+                );
+                allBoards = [...allBoards, ...newUserBoards];
+                console.log(`👤 User-specific search: found ${myBoards.length} boards (${newUserBoards.length} new)`);
+            }
+            
+        } catch (userError) {
+            console.log('⚠️ User-specific boards search failed:', userError.message);
+        }
+        
+        // Categorize boards
+        const publicBoards = allBoards.filter(b => b.board_kind === 'public');
+        const privateBoards = allBoards.filter(b => b.board_kind === 'private');
+        const shareableBoards = allBoards.filter(b => b.board_kind === 'share');
+        
+        console.log('📊 Final board summary:', {
+            total: allBoards.length,
+            public: publicBoards.length,
+            private: privateBoards.length,
+            shareable: shareableBoards.length
+        });
+        
+        res.json({
+            success: true,
+            boards: allBoards,
+            summary: {
+                total: allBoards.length,
+                public: publicBoards.length,
+                private: privateBoards.length,
+                shareable: shareableBoards.length,
+                byWorkspace: allBoards.reduce((acc, board) => {
+                    const workspace = board.workspace?.name || 'Unknown';
+                    acc[workspace] = (acc[workspace] || 0) + 1;
+                    return acc;
+                }, {})
+            },
+            categorized: {
+                public: publicBoards,
+                private: privateBoards,
+                shareable: shareableBoards
+            },
+            note: 'Retrieved all accessible boards including private ones'
+        });
+        
+    } catch (error) {
+        console.error('❌ Enhanced boards API error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get only private boards
+app.get('/api/boards-private', async (req, res) => {
+    try {
+        console.log('🔒 Fetching PRIVATE boards only...');
+        
+        const query = `
+            query {
+                boards(limit: 200) {
+                    id
+                    name
+                    description
+                    state
+                    board_kind
+                    permissions
+                    workspace {
+                        id
+                        name
+                    }
+                    owners {
+                        id
+                        name
+                        email
+                    }
+                    subscribers {
+                        id
+                        name
+                        email
+                    }
+                    groups {
+                        id
+                        title
+                        color
+                    }
+                    items_page(limit: 5) {
+                        items {
+                            id
+                            name
+                            state
+                        }
+                    }
+                }
+            }
+        `;
+        
+        const result = await makeMondayRequest(query);
+        const allBoards = result.boards || [];
+        
+        // Filter for private boards only
+        const privateBoards = allBoards.filter(board => board.board_kind === 'private');
+        
+        console.log(`🔒 Found ${privateBoards.length} private boards out of ${allBoards.length} total`);
+        
+        res.json({
+            success: true,
+            boards: privateBoards,
+            count: privateBoards.length,
+            totalChecked: allBoards.length,
+            boardNames: privateBoards.map(b => b.name),
+            note: 'Filtered for private boards only'
+        });
+        
+    } catch (error) {
+        console.error('❌ Private boards API error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get boards by permissions level
+app.get('/api/boards-by-permission', async (req, res) => {
+    try {
+        const permissionLevel = req.query.level || 'all'; // all, owner, subscriber, viewer
+        
+        console.log(`🔐 Fetching boards by permission level: ${permissionLevel}`);
+        
+        const query = `
+            query {
+                me {
+                    id
+                    name
+                }
+                boards(limit: 200) {
+                    id
+                    name
+                    description
+                    state
+                    board_kind
+                    permissions
+                    workspace {
+                        id
+                        name
+                    }
+                    owners {
+                        id
+                        name
+                        email
+                    }
+                    subscribers {
+                        id
+                        name
+                        email
+                    }
+                }
+            }
+        `;
+        
+        const result = await makeMondayRequest(query);
+        const currentUser = result.me;
+        const allBoards = result.boards || [];
+        
+        let filteredBoards = allBoards;
+        
+        if (permissionLevel === 'owner') {
+            filteredBoards = allBoards.filter(board => 
+                board.owners?.some(owner => owner.id === currentUser.id)
+            );
+        } else if (permissionLevel === 'subscriber') {
+            filteredBoards = allBoards.filter(board => 
+                board.subscribers?.some(sub => sub.id === currentUser.id)
+            );
+        } else if (permissionLevel === 'private-owner') {
+            filteredBoards = allBoards.filter(board => 
+                board.board_kind === 'private' && 
+                board.owners?.some(owner => owner.id === currentUser.id)
+            );
+        }
+        
+        const summary = {
+            total: filteredBoards.length,
+            public: filteredBoards.filter(b => b.board_kind === 'public').length,
+            private: filteredBoards.filter(b => b.board_kind === 'private').length,
+            shareable: filteredBoards.filter(b => b.board_kind === 'share').length
+        };
+        
+        console.log(`🔐 Permission filter "${permissionLevel}": ${filteredBoards.length} boards`);
+        
+        res.json({
+            success: true,
+            boards: filteredBoards,
+            summary,
+            filter: permissionLevel,
+            currentUser: {
+                id: currentUser.id,
+                name: currentUser.name
+            },
+            note: `Filtered boards by permission level: ${permissionLevel}`
+        });
+        
+    } catch (error) {
+        console.error('❌ Permission-based boards API error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Enhanced test for private board access
+app.get('/api/test-private-access', async (req, res) => {
+    try {
+        console.log('🧪 Testing private board access capabilities...');
+        
+        const tests = [];
+        
+        // Test 1: Can we see board kinds?
+        try {
+            const boardKindsQuery = `
+                query {
+                    boards(limit: 10) {
+                        id
+                        name
+                        board_kind
+                        permissions
+                    }
+                }
+            `;
+            const result = await makeMondayRequest(boardKindsQuery);
+            const boards = result.boards || [];
+            const kinds = [...new Set(boards.map(b => b.board_kind))];
+            
+            tests.push({
+                test: 'Board Kinds Detection',
+                status: 'PASS',
+                data: { totalBoards: boards.length, kinds }
+            });
+        } catch (error) {
+            tests.push({
+                test: 'Board Kinds Detection',
+                status: 'FAIL',
+                error: error.message
+            });
+        }
+        
+        // Test 2: Can we access workspace info?
+        try {
+            const workspaceQuery = `
+                query {
+                    workspaces {
+                        id
+                        name
+                        kind
+                        state
+                    }
+                }
+            `;
+            const result = await makeMondayRequest(workspaceQuery);
+            const workspaces = result.workspaces || [];
+            
+            tests.push({
+                test: 'Workspace Access',
+                status: 'PASS',
+                data: { 
+                    count: workspaces.length,
+                    types: [...new Set(workspaces.map(w => w.kind))]
+                }
+            });
+        } catch (error) {
+            tests.push({
+                test: 'Workspace Access',
+                status: 'FAIL',
+                error: error.message
+            });
+        }
+        
+        // Test 3: Can we see ownership info?
+        try {
+            const ownershipQuery = `
+                query {
+                    me { id name }
+                    boards(limit: 5) {
+                        id
+                        name
+                        board_kind
+                        owners { id name }
+                        subscribers { id name }
+                    }
+                }
+            `;
+            const result = await makeMondayRequest(ownershipQuery);
+            const me = result.me;
+            const boards = result.boards || [];
+            
+            const ownedBoards = boards.filter(b => 
+                b.owners?.some(owner => owner.id === me.id)
+            );
+            
+            tests.push({
+                test: 'Ownership Detection',
+                status: 'PASS',
+                data: { 
+                    userId: me.id,
+                    totalBoards: boards.length,
+                    ownedBoards: ownedBoards.length
+                }
+            });
+        } catch (error) {
+            tests.push({
+                test: 'Ownership Detection',
+                status: 'FAIL',
+                error: error.message
+            });
+        }
+        
+        const passCount = tests.filter(t => t.status === 'PASS').length;
+        
+        res.json({
+            success: true,
+            summary: `${passCount}/${tests.length} private access tests passed`,
+            tests,
+            recommendations: passCount === tests.length ? 
+                ['All tests passed! You should be able to access private boards'] :
+                ['Some tests failed - check your API token permissions']
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+console.log('🔒 Private boards endpoints added:');
+console.log('   GET /api/boards-all - All boards (public + private)');
+console.log('   GET /api/boards-private - Private boards only'); 
+console.log('   GET /api/boards-by-permission?level=owner - Filter by permission');
+console.log('   GET /api/test-private-access - Test private access capabilities');
