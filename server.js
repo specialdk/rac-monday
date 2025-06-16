@@ -1520,6 +1520,43 @@ function generateRecommendations(tests) {
     return recommendations;
 }
 
+// Debug endpoint - RESTORED
+app.get('/api/debug', (req, res) => {
+    res.json({
+        timestamp: new Date().toISOString(),
+        config: {
+            apiUrl: MONDAY_CONFIG.apiUrl,
+            apiVersion: MONDAY_CONFIG.apiVersion,
+            hasToken: !!MONDAY_CONFIG.apiToken,
+            rateLimit: MONDAY_CONFIG.rateLimit
+        },
+        cache: {
+            boardsCount: mondayCache.boards.length,
+            usersCount: mondayCache.users.length,
+            teamsCount: mondayCache.teams.length,
+            lastUpdated: mondayCache.lastUpdated
+        },
+        endpoints: [
+            'GET /api/boards',
+            'GET /api/board/:id', 
+            'POST /api/create-board',
+            'GET /api/items',
+            'POST /api/create-item',
+            'POST /api/update-item',
+            'GET /api/users',
+            'GET /api/teams',
+            'GET /api/activity',
+            'GET /api/updates',
+            'POST /api/create-update',
+            'GET /api/stats',
+            'GET /api/logs',
+            'POST /api/custom-query',
+            'GET /api/test-permissions'
+        ],
+        permissionTests: 'Available at /api/test-permissions'
+    });
+});
+
 // Health check
 app.get('/health', (req, res) => {
     res.json({
