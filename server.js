@@ -1,6 +1,6 @@
 // Monday.com API MCP Connection - Complete Setup
 // File: server.js
-require('dotenv').config();
+
 const express = require('express');
 const fetch = require('node-fetch');
 const app = express();
