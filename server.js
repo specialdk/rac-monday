@@ -1,4 +1,4 @@
-// Monday.com API MCP Connection - Complete Setup
+// Monday.com API MCP Connection - Complete Setup with Traffic Report Integration
 // File: server.js
 
 const express = require('express');
@@ -11,7 +11,7 @@ const MONDAY_CONFIG = {
     apiUrl: 'https://api.monday.com/v2',
     apiToken: process.env.MONDAY_API_TOKEN,
     apiVersion: '2023-04',
-    
+
     // Rate limiting info
     rateLimit: {
         requests: 5000,
@@ -33,10 +33,6 @@ app.use(express.static('public'));
 // Make authenticated GraphQL request to Monday.com
 async function makeMondayRequest(query, variables = {}) {
     try {
-        console.log('📡 Making Monday.com API request...');
-        console.log('🔗 URL:', MONDAY_CONFIG.apiUrl);
-        console.log('🎯 Query:', query.substring(0, 100) + '...');
-        
         const response = await fetch(MONDAY_CONFIG.apiUrl, {
             method: 'POST',
             headers: {
@@ -50,28 +46,12 @@ async function makeMondayRequest(query, variables = {}) {
             })
         });
 
-        console.log('📥 Response status:', response.status, response.statusText);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ HTTP Error:', response.status, errorText);
-            throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
-        }
-
         const data = await response.json();
-        console.log('📊 Response data keys:', Object.keys(data));
-        
+
         if (data.errors) {
-            console.error('❌ GraphQL Errors:', data.errors);
             throw new Error(data.errors.map(e => e.message).join(', '));
         }
 
-        if (!data.data) {
-            console.error('❌ No data in response:', data);
-            throw new Error('No data field in API response');
-        }
-
-        console.log('✅ API request successful');
         return data.data;
     } catch (error) {
         console.error('❌ Monday.com API error:', error);
@@ -82,8 +62,6 @@ async function makeMondayRequest(query, variables = {}) {
 // Test API connection
 async function testMondayConnection() {
     try {
-        console.log('📡 Testing Monday.com API connection...');
-        
         const query = `
             query {
                 me {
@@ -100,19 +78,10 @@ async function testMondayConnection() {
                 }
             }
         `;
-        
-        console.log('🔄 Making GraphQL request...');
+
         const result = await makeMondayRequest(query);
-        
-        console.log('📥 Raw API response:', JSON.stringify(result, null, 2));
-        
-        if (!result || !result.me) {
-            throw new Error('Invalid response from Monday.com API - no user data found');
-        }
-        
         return result;
     } catch (error) {
-        console.error('❌ Monday.com API test failed:', error);
         throw new Error(`Connection test failed: ${error.message}`);
     }
 }
@@ -305,8 +274,9 @@ app.get('/', (req, res) => {
             <!-- Boards Tab -->
             <div id="boards-tab" class="tab-content active">
                 <div class="button-grid">
-                    <button onclick="getBoards()" disabled id="btn-boards">📋 Get All Boards</button>
-                    <button onclick="getBoardDetails()" disabled id="btn-board-details">🔍 Get Board Details</button>
+                    <button onclick="getBoards()" disabled id="btn-boards">📋 Get All Boards (Inc. Private)</button>
+                    <button onclick="getTrafficReportOnly()" disabled id="btn-traffic-report">🚦 Get Traffic Report Only</button>
+                    <button onclick="getBoardDetails()" disabled id="btn-board-details">🔍 Get Board Details (by ID)</button>
                     <button onclick="createBoard()" disabled id="btn-create-board">➕ Create New Board</button>
                 </div>
                 <div id="boardsResult"></div>
@@ -389,23 +359,15 @@ query {
             showLoading('connectionResult');
             
             fetch('/test-connection', { method: 'POST' })
-                .then(response => {
-                    console.log('Response status:', response.status);
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
-                    console.log('Response data:', data);
-                    if (data.success && data.user) {
+                    if (data.success) {
                         currentUser = data.user;
-                        const planVersion = data.user.account?.plan?.version || 'Unknown';
-                        const accountName = data.user.account?.name || 'Unknown Account';
-                        
                         document.getElementById('connectionResult').innerHTML = 
                             '<div class="status connected">✅ Connection successful!</div>' +
-                            '<p><strong>User:</strong> ' + (data.user.name || 'Unknown') + ' (' + (data.user.email || 'No email') + ')</p>' +
-                            '<p><strong>Account:</strong> ' + accountName + '</p>' +
-                            '<p><strong>Plan:</strong> ' + planVersion + '</p>' +
-                            '<p><strong>User ID:</strong> ' + (data.user.id || 'Unknown') + '</p>';
+                            '<p><strong>User:</strong> ' + data.user.name + ' (' + data.user.email + ')</p>' +
+                            '<p><strong>Account:</strong> ' + data.user.account.name + '</p>' +
+                            '<p><strong>Plan:</strong> ' + data.user.account.plan.version + '</p>';
                         
                         document.getElementById('connectionStatus').innerHTML = 
                             '✅ Connected - Monday.com API ready';
@@ -419,7 +381,6 @@ query {
                     }
                 })
                 .catch(error => {
-                    console.error('Fetch error:', error);
                     document.getElementById('connectionResult').innerHTML = 
                         '<div class="status disconnected">❌ Network Error: ' + error.message + '</div>';
                 });
@@ -443,15 +404,22 @@ query {
 
         // Display boards in a nice format
         function displayBoards(boards) {
-            let html = '<h4>📋 Your Boards (' + boards.length + ')</h4>';
+            let html = '<h4>📋 Your Active Boards (' + boards.length + ')</h4>';
             
-            boards.forEach(board => {
+            // Sort boards by name for easier finding
+            const sortedBoards = [...boards].sort((a, b) => a.name.localeCompare(b.name));
+            
+            sortedBoards.forEach(board => {
                 const itemCount = board.items ? board.items.length : 0;
                 const groupCount = board.groups ? board.groups.length : 0;
+                const boardIcon = board.board_kind === 'private' ? '🔒' : '📋';
+                const kindBadge = board.board_kind === 'private' ? 
+                    '<span style="background: #fef2f2; color: #dc2626; padding: 2px 6px; border-radius: 3px; font-size: 11px;">🔒 Private</span>' : 
+                    '<span style="background: #ecfdf5; color: #047857; padding: 2px 6px; border-radius: 3px; font-size: 11px;">🌐 Public</span>';
                 
                 html += '<div class="board-card">';
                 html += '<div class="board-header">';
-                html += '<div class="board-name">📋 ' + board.name + '</div>';
+                html += '<div class="board-name">' + boardIcon + ' ' + board.name + ' ' + kindBadge + '</div>';
                 html += '</div>';
                 html += '<p><strong>Description:</strong> ' + (board.description || 'No description') + '</p>';
                 html += '<div class="board-stats">';
@@ -459,6 +427,14 @@ query {
                 html += '<div class="stat">📁 ' + groupCount + ' groups</div>';
                 html += '<div class="stat">🆔 ' + board.id + '</div>';
                 html += '</div>';
+                
+                // Special highlighting for Traffic Light Report
+                if (board.name.includes('Traffic Light Report') || board.name.includes('Traffic Report')) {
+                    html += '<div style="background: #fef3c7; border: 1px solid #f59e0b; padding: 10px; border-radius: 6px; margin-top: 10px;">';
+                    html += '<strong>⭐ Found your Traffic Report board!</strong><br>';
+                    html += '<button onclick="getTrafficReportDetails(\'' + board.id + '\')" style="margin-top: 5px;">📊 View Traffic Report Details</button>';
+                    html += '</div>';
+                }
                 
                 if (board.items && board.items.length > 0) {
                     html += '<h5>Recent Items:</h5>';
@@ -476,7 +452,109 @@ query {
             document.getElementById('boardsResult').innerHTML = html;
         }
 
-        // Get board details
+        // Get only Traffic Report board
+        function getTrafficReportOnly() {
+            showLoading('boardsResult');
+            
+            // Use the known Traffic Report board ID
+            fetch('/api/board/1996823202')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.board) {
+                        displayTrafficReport(data.board);
+                    } else {
+                        document.getElementById('boardsResult').innerHTML = 
+                            '<div class="status disconnected">❌ Error: ' + (data.error || 'Failed to get Traffic Report') + '</div>';
+                    }
+                });
+        }
+
+        // Get Traffic Report specific details
+        function getTrafficReportDetails(boardId) {
+            showLoading('boardsResult');
+            
+            fetch('/api/board/' + boardId)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.board) {
+                        displayTrafficReport(data.board);
+                    } else {
+                        document.getElementById('boardsResult').innerHTML = 
+                            '<div class="status disconnected">❌ Error: ' + (data.error || 'Failed to get Traffic Report details') + '</div>';
+                    }
+                });
+        }
+
+        // Display Traffic Report in a detailed format
+        function displayTrafficReport(board) {
+            let html = '<div style="background: #f0f9ff; border: 2px solid #0369a1; border-radius: 8px; padding: 20px; margin: 10px 0;">';
+            html += '<h3>🚦 ' + board.name + ' - Detailed View</h3>';
+            html += '<p><strong>Board ID:</strong> ' + board.id + '</p>';
+            html += '<p><strong>Description:</strong> ' + (board.description || 'No description') + '</p>';
+            html += '<p><strong>Type:</strong> ' + (board.board_kind === 'private' ? '🔒 Private' : '🌐 Public') + '</p>';
+            
+            if (board.groups && board.groups.length > 0) {
+                html += '<h4>📁 Groups in this Board:</h4>';
+                board.groups.forEach(group => {
+                    html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin: 10px 0;">';
+                    html += '<h5 style="margin: 0 0 10px 0; color: ' + (group.color || '#374151') + ';">📂 ' + group.title + '</h5>';
+                    
+                    if (group.items && group.items.length > 0) {
+                        html += '<h6>Items in this group:</h6>';
+                        group.items.forEach(item => {
+                            html += '<div class="item-row">';
+                            html += '<span>📝 ' + item.name + '</span>';
+                            html += '<span class="status-label status-' + (item.state || 'working') + '">' + (item.state || 'Active') + '</span>';
+                            html += '</div>';
+                            
+                            // Show column values if available
+                            if (item.column_values && item.column_values.length > 0) {
+                                html += '<div style="margin-left: 20px; margin-top: 5px; font-size: 12px; color: #6b7280;">';
+                                item.column_values.forEach(col => {
+                                    if (col.text && col.text.trim()) {
+                                        html += '<span style="margin-right: 15px;"><strong>' + col.title + ':</strong> ' + col.text + '</span>';
+                                    }
+                                });
+                                html += '</div>';
+                            }
+                        });
+                    } else {
+                        html += '<p style="color: #6b7280; font-style: italic;">No items in this group</p>';
+                    }
+                    html += '</div>';
+                });
+            }
+            
+            html += '<div style="margin-top: 20px;">';
+            html += '<button onclick="getBoards()" style="margin-right: 10px;">← Back to All Boards</button>';
+            html += '<button onclick="exportTrafficData(\'' + board.id + '\')">📊 Export Traffic Data</button>';
+            html += '</div>';
+            html += '</div>';
+            
+            document.getElementById('boardsResult').innerHTML = html;
+        }
+
+        // Export Traffic Report data
+        function exportTrafficData(boardId) {
+            fetch('/api/board/' + boardId)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Create downloadable JSON
+                        const dataStr = JSON.stringify(data.board, null, 2);
+                        const dataBlob = new Blob([dataStr], {type: 'application/json'});
+                        
+                        const link = document.createElement('a');
+                        link.href = URL.createObjectURL(dataBlob);
+                        link.download = 'traffic-report-' + new Date().toISOString().split('T')[0] + '.json';
+                        link.click();
+                        
+                        alert('✅ Traffic Report data exported successfully!');
+                    }
+                });
+        }
+
+        // Get board details (original function for manual ID entry)
         function getBoardDetails() {
             const boardId = prompt('Enter Board ID to get details:');
             if (!boardId) return;
@@ -715,7 +793,7 @@ query {
 
         function enableAllButtons() {
             const buttons = [
-                'btn-boards', 'btn-board-details', 'btn-create-board',
+                'btn-boards', 'btn-traffic-report', 'btn-board-details', 'btn-create-board',
                 'btn-items', 'btn-create-item', 'btn-update-item',
                 'btn-users', 'btn-teams', 'btn-activity',
                 'btn-updates', 'btn-create-update',
@@ -750,33 +828,20 @@ query {
 // Test connection endpoint
 app.post('/test-connection', async (req, res) => {
     try {
-        console.log('🔍 Testing Monday.com connection...');
-        
         if (!MONDAY_CONFIG.apiToken) {
-            console.error('❌ No API token configured');
             throw new Error('API token not configured. Please set MONDAY_API_TOKEN environment variable.');
         }
 
-        console.log('📡 Making API request to Monday.com...');
         const user = await testMondayConnection();
-        
-        console.log('✅ Monday.com connection successful:', {
-            userId: user.me?.id,
-            userName: user.me?.name,
-            userEmail: user.me?.email
-        });
-        
         res.json({
             success: true,
-            user: user.me,
+            user,
             message: 'Connection successful'
         });
     } catch (error) {
-        console.error('❌ Monday.com connection failed:', error);
         res.status(500).json({
             success: false,
-            error: error.message,
-            details: error.stack
+            error: error.message
         });
     }
 });
@@ -790,127 +855,52 @@ app.get('/connection-status', (req, res) => {
     });
 });
 
-// Get all boards - ENHANCED TO INCLUDE MAIN WORKSPACE
+// Get all boards (including private boards)
 app.get('/api/boards', async (req, res) => {
     try {
-        // Get workspaces the user has access to
-        const workspacesQuery = `
+        const query = `
             query {
-                workspaces(limit: 20) {
+                boards(limit: 100, state: all) {
                     id
                     name
                     description
                     state
+                    board_folder_id
+                    board_kind
+                    permissions
+                    groups {
+                        id
+                        title
+                        color
+                    }
+                    items(limit: 5) {
+                        id
+                        name
+                        state
+                        created_at
+                        updated_at
+                    }
+                    owners {
+                        id
+                        name
+                        email
+                    }
                 }
             }
         `;
 
-        const workspacesResult = await makeMondayRequest(workspacesQuery);
-        console.log('🏢 Workspaces found:', workspacesResult.workspaces?.map(w => w.name));
+        const result = await makeMondayRequest(query);
 
-        let allBoards = [];
-        
-        // Process all workspaces, including Main workspace
-        for (const workspace of workspacesResult.workspaces || []) {
-            try {
-                const boardsQuery = `
-                    query($workspaceId: ID!) {
-                        boards(workspace_ids: [$workspaceId], limit: 50) {
-                            id
-                            name
-                            description
-                            state
-                            board_kind
-                            workspace {
-                                id
-                                name
-                            }
-                            owners {
-                                id
-                                name
-                                email
-                            }
-                            groups {
-                                id
-                                title
-                                color
-                            }
-                        }
-                    }
-                `;
+        // Filter to only show active boards, but include both public and private
+        const activeBoards = result.boards?.filter(board => board.state === 'active') || [];
 
-                const boardsResult = await makeMondayRequest(boardsQuery, { workspaceId: workspace.id });
-                
-                if (boardsResult.boards && boardsResult.boards.length > 0) {
-                    allBoards = [...allBoards, ...boardsResult.boards];
-                    console.log(`📋 Found ${boardsResult.boards.length} boards in workspace "${workspace.name}"`);
-                    console.log(`   Board names: ${boardsResult.boards.map(b => b.name).join(', ')}`);
-                } else {
-                    console.log(`📋 No boards accessible in workspace "${workspace.name}"`);
-                }
-            } catch (workspaceError) {
-                console.log(`⚠️ Could not access workspace "${workspace.name}":`, workspaceError.message);
-                
-                // Try alternative method for Main workspace
-                if (workspace.name === 'Main workspace') {
-                    try {
-                        console.log('🔄 Trying alternative query for Main workspace...');
-                        const mainWorkspaceQuery = `
-                            query {
-                                boards(limit: 50) {
-                                    id
-                                    name
-                                    description
-                                    state
-                                    board_kind
-                                    workspace {
-                                        id
-                                        name
-                                    }
-                                    owners {
-                                        id
-                                        name
-                                        email
-                                    }
-                                    groups {
-                                        id
-                                        title
-                                        color
-                                    }
-                                }
-                            }
-                        `;
-                        
-                        const mainResult = await makeMondayRequest(mainWorkspaceQuery);
-                        const mainWorkspaceBoards = mainResult.boards?.filter(b => 
-                            b.workspace?.name === 'Main workspace' || 
-                            b.workspace?.id === '1110698'
-                        ) || [];
-                        
-                        if (mainWorkspaceBoards.length > 0) {
-                            allBoards = [...allBoards, ...mainWorkspaceBoards];
-                            console.log(`📋 Found ${mainWorkspaceBoards.length} boards in Main workspace via alternative method`);
-                            console.log(`   Board names: ${mainWorkspaceBoards.map(b => b.name).join(', ')}`);
-                        }
-                    } catch (alternativeError) {
-                        console.log('⚠️ Alternative method for Main workspace also failed:', alternativeError.message);
-                    }
-                }
-            }
-        }
-        
-        console.log('📊 Total boards found:', allBoards.length);
-        console.log('📝 All board names:', allBoards.map(b => b.name));
-        
         res.json({
             success: true,
-            boards: allBoards,
-            count: allBoards.length,
-            workspaces: workspacesResult.workspaces?.map(w => w.name) || [],
-            note: 'Retrieved boards from accessible workspaces, including Main workspace'
+            boards: activeBoards,
+            count: activeBoards.length,
+            total: result.boards?.length || 0
         });
     } catch (error) {
-        console.error('❌ Boards API error:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -922,10 +912,10 @@ app.get('/api/boards', async (req, res) => {
 app.get('/api/board/:id', async (req, res) => {
     try {
         const boardId = req.params.id;
-        
+
         const query = `
-            query($boardId: [ID!]) {
-                boards(ids: $boardId) {
+            query($boardId: ID!) {
+                boards(ids: [$boardId]) {
                     id
                     name
                     description
@@ -936,6 +926,18 @@ app.get('/api/board/:id', async (req, res) => {
                         id
                         title
                         color
+                        items {
+                            id
+                            name
+                            state
+                            column_values {
+                                id
+                                text
+                                title
+                                type
+                                value
+                            }
+                        }
                     }
                     columns {
                         id
@@ -953,26 +955,12 @@ app.get('/api/board/:id', async (req, res) => {
                         name
                         email
                     }
-                    items_page(limit: 25) {
-                        items {
-                            id
-                            name
-                            state
-                            column_values {
-                                id
-                                text
-                                title
-                                type
-                                value
-                            }
-                        }
-                    }
                 }
             }
         `;
 
-        const result = await makeMondayRequest(query, { boardId: [boardId] });
-        
+        const result = await makeMondayRequest(query, { boardId });
+
         res.json({
             success: true,
             board: result.boards?.[0] || null
@@ -989,7 +977,7 @@ app.get('/api/board/:id', async (req, res) => {
 app.post('/api/create-board', async (req, res) => {
     try {
         const { name, description, boardKind } = req.body;
-        
+
         const mutation = `
             mutation($boardName: String!, $boardKind: BoardKind, $description: String) {
                 create_board(
@@ -1011,7 +999,7 @@ app.post('/api/create-board', async (req, res) => {
         };
 
         const result = await makeMondayRequest(mutation, variables);
-        
+
         res.json({
             success: true,
             board: result.create_board
@@ -1024,61 +1012,52 @@ app.post('/api/create-board', async (req, res) => {
     }
 });
 
-// Get all items - FIXED FOR ACCESSIBLE ITEMS
+// Get all items
 app.get('/api/items', async (req, res) => {
     try {
         const query = `
             query {
-                items_page(limit: 50) {
-                    items {
+                items(limit: 50) {
+                    id
+                    name
+                    state
+                    created_at
+                    updated_at
+                    board {
                         id
                         name
-                        state
+                    }
+                    group {
+                        id
+                        title
+                    }
+                    column_values {
+                        id
+                        text
+                        title
+                        type
+                    }
+                    creator {
+                        id
+                        name
+                    }
+                    updates {
+                        id
+                        body
                         created_at
-                        updated_at
-                        board {
-                            id
-                            name
-                            workspace {
-                                id
-                                name
-                            }
-                        }
-                        group {
-                            id
-                            title
-                        }
-                        column_values {
-                            id
-                            text
-                            title
-                            type
-                        }
-                        creator {
-                            id
-                            name
-                        }
                     }
                 }
             }
         `;
 
         const result = await makeMondayRequest(query);
-        
-        console.log('📝 Items API response:', {
-            totalItems: result.items_page?.items?.length || 0,
-            uniqueBoards: [...new Set(result.items_page?.items?.map(i => i.board?.name) || [])],
-            sampleItems: result.items_page?.items?.slice(0, 3)?.map(i => i.name) || []
-        });
-        
+
         res.json({
             success: true,
-            items: result.items_page?.items || [],
-            count: result.items_page?.items?.length || 0,
-            boardsSeen: [...new Set(result.items_page?.items?.map(i => i.board?.name) || [])]
+            items: result.items || [],
+            count: result.items?.length || 0
         });
     } catch (error) {
-        console.error('❌ Items API error:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -1090,7 +1069,7 @@ app.get('/api/items', async (req, res) => {
 app.post('/api/create-item', async (req, res) => {
     try {
         const { boardId, itemName, groupId } = req.body;
-        
+
         const mutation = `
             mutation($boardId: ID!, $itemName: String!, $groupId: String) {
                 create_item(
@@ -1116,7 +1095,7 @@ app.post('/api/create-item', async (req, res) => {
         };
 
         const result = await makeMondayRequest(mutation, variables);
-        
+
         res.json({
             success: true,
             item: result.create_item
@@ -1133,7 +1112,7 @@ app.post('/api/create-item', async (req, res) => {
 app.post('/api/update-item', async (req, res) => {
     try {
         const { itemId, name, columnValues } = req.body;
-        
+
         let mutation = '';
         let variables = {};
 
@@ -1172,7 +1151,7 @@ app.post('/api/update-item', async (req, res) => {
         }
 
         const result = await makeMondayRequest(mutation, variables);
-        
+
         res.json({
             success: true,
             item: result.change_simple_column_value || result.change_multiple_column_values
@@ -1211,7 +1190,7 @@ app.get('/api/users', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-        
+
         res.json({
             success: true,
             users: result.users || [],
@@ -1244,7 +1223,7 @@ app.get('/api/teams', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-        
+
         res.json({
             success: true,
             teams: result.teams || [],
@@ -1275,7 +1254,7 @@ app.get('/api/activity', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-        
+
         res.json({
             success: true,
             logs: result.activity_logs || [],
@@ -1326,7 +1305,7 @@ app.get('/api/updates', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-        
+
         res.json({
             success: true,
             updates: result.updates || [],
@@ -1344,7 +1323,7 @@ app.get('/api/updates', async (req, res) => {
 app.post('/api/create-update', async (req, res) => {
     try {
         const { itemId, text } = req.body;
-        
+
         const mutation = `
             mutation($itemId: ID!, $body: String!) {
                 create_update(
@@ -1364,7 +1343,7 @@ app.post('/api/create-update', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(mutation, { itemId, body: text });
-        
+
         res.json({
             success: true,
             update: result.create_update
@@ -1405,12 +1384,12 @@ app.get('/api/stats', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-        
+
         // Calculate statistics
         const boards = result.boards || [];
         const users = result.users || [];
         const teams = result.teams || [];
-        
+
         const stats = {
             boards: {
                 total: boards.length,
@@ -1421,9 +1400,9 @@ app.get('/api/stats', async (req, res) => {
             },
             items: {
                 total: boards.reduce((sum, board) => sum + (board.items?.length || 0), 0),
-                active: boards.reduce((sum, board) => 
+                active: boards.reduce((sum, board) =>
                     sum + (board.items?.filter(item => item.state === 'active').length || 0), 0),
-                done: boards.reduce((sum, board) => 
+                done: boards.reduce((sum, board) =>
                     sum + (board.items?.filter(item => item.state === 'done').length || 0), 0)
             },
             users: {
@@ -1436,7 +1415,7 @@ app.get('/api/stats', async (req, res) => {
                 total: teams.length
             }
         };
-        
+
         res.json({
             success: true,
             statistics: stats,
@@ -1467,7 +1446,7 @@ app.get('/api/logs', async (req, res) => {
         `;
 
         const result = await makeMondayRequest(query);
-        
+
         res.json({
             success: true,
             logs: result.activity_logs || [],
@@ -1485,13 +1464,13 @@ app.get('/api/logs', async (req, res) => {
 app.post('/api/custom-query', async (req, res) => {
     try {
         const { query, variables } = req.body;
-        
+
         if (!query) {
             throw new Error('Query is required');
         }
-        
+
         const result = await makeMondayRequest(query, variables || {});
-        
+
         res.json({
             success: true,
             data: result,
@@ -1507,99 +1486,7 @@ app.post('/api/custom-query', async (req, res) => {
     }
 });
 
-// Test permissions endpoint
-app.get('/api/test-permissions', async (req, res) => {
-    try {
-        const tests = [];
-        
-        // Test 1: Basic user info (should always work)
-        try {
-            const userQuery = `query { me { id name email } }`;
-            const userResult = await makeMondayRequest(userQuery);
-            tests.push({ test: 'User Info', status: 'PASS', data: userResult.me });
-        } catch (error) {
-            tests.push({ test: 'User Info', status: 'FAIL', error: error.message });
-        }
-        
-        // Test 2: Account info
-        try {
-            const accountQuery = `query { me { account { id name plan { version } } } }`;
-            const accountResult = await makeMondayRequest(accountQuery);
-            tests.push({ test: 'Account Info', status: 'PASS', data: accountResult.me.account });
-        } catch (error) {
-            tests.push({ test: 'Account Info', status: 'FAIL', error: error.message });
-        }
-        
-        // Test 3: Basic boards access
-        try {
-            const boardsQuery = `query { boards(limit: 1) { id name } }`;
-            const boardsResult = await makeMondayRequest(boardsQuery);
-            tests.push({ test: 'Basic Boards', status: 'PASS', data: boardsResult.boards });
-        } catch (error) {
-            tests.push({ test: 'Basic Boards', status: 'FAIL', error: error.message });
-        }
-        
-        // Test 4: Users access
-        try {
-            const usersQuery = `query { users(limit: 1) { id name } }`;
-            const usersResult = await makeMondayRequest(usersQuery);
-            tests.push({ test: 'Users Access', status: 'PASS', data: usersResult.users });
-        } catch (error) {
-            tests.push({ test: 'Users Access', status: 'FAIL', error: error.message });
-        }
-        
-        // Test 5: Teams access
-        try {
-            const teamsQuery = `query { teams(limit: 1) { id name } }`;
-            const teamsResult = await makeMondayRequest(teamsQuery);
-            tests.push({ test: 'Teams Access', status: 'PASS', data: teamsResult.teams });
-        } catch (error) {
-            tests.push({ test: 'Teams Access', status: 'FAIL', error: error.message });
-        }
-        
-        const passedTests = tests.filter(t => t.status === 'PASS').length;
-        const totalTests = tests.length;
-        
-        res.json({
-            success: true,
-            summary: `${passedTests}/${totalTests} permission tests passed`,
-            tests,
-            recommendations: generateRecommendations(tests)
-        });
-        
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
-    }
-});
-
-function generateRecommendations(tests) {
-    const recommendations = [];
-    
-    const failedTests = tests.filter(t => t.status === 'FAIL');
-    
-    if (failedTests.some(t => t.test === 'Basic Boards')) {
-        recommendations.push('Your account may need board access permissions or a plan upgrade');
-    }
-    
-    if (failedTests.some(t => t.test === 'Users Access')) {
-        recommendations.push('User management requires admin privileges or higher plan');
-    }
-    
-    if (failedTests.some(t => t.test === 'Teams Access')) {
-        recommendations.push('Team access requires admin privileges');
-    }
-    
-    if (failedTests.length === 0) {
-        recommendations.push('All permissions working! You have full API access');
-    }
-    
-    return recommendations;
-}
-
-// Debug endpoint - RESTORED
+// Debug endpoint
 app.get('/api/debug', (req, res) => {
     res.json({
         timestamp: new Date().toISOString(),
@@ -1617,7 +1504,7 @@ app.get('/api/debug', (req, res) => {
         },
         endpoints: [
             'GET /api/boards',
-            'GET /api/board/:id', 
+            'GET /api/board/:id',
             'POST /api/create-board',
             'GET /api/items',
             'POST /api/create-item',
@@ -1629,10 +1516,8 @@ app.get('/api/debug', (req, res) => {
             'POST /api/create-update',
             'GET /api/stats',
             'GET /api/logs',
-            'POST /api/custom-query',
-            'GET /api/test-permissions'
-        ],
-        permissionTests: 'Available at /api/test-permissions'
+            'POST /api/custom-query'
+        ]
     });
 });
 
@@ -1651,7 +1536,7 @@ app.listen(port, () => {
     console.log(`📊 Dashboard: http://localhost:${port}`);
     console.log(`🔗 GraphQL API: ${MONDAY_CONFIG.apiUrl}`);
     console.log(`🎯 Ready for Monday.com integration!`);
-    
+
     if (!MONDAY_CONFIG.apiToken) {
         console.warn('⚠️  Please set MONDAY_API_TOKEN environment variable');
         console.warn('📋 Get your token from: https://monday.com → Profile → Developer → My Access Tokens');
