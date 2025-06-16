@@ -2172,3 +2172,391 @@ console.log('   GET /api/boards-all - All boards (public + private)');
 console.log('   GET /api/boards-private - Private boards only'); 
 console.log('   GET /api/boards-by-permission?level=owner - Filter by permission');
 console.log('   GET /api/test-private-access - Test private access capabilities');
+// WEEKLY PROJECT PROGRESS SUMMARY - Add this to the END of your server.js file
+
+// Get weekly progress summary for all projects
+app.get('/api/weekly-summary', async (req, res) => {
+    try {
+        const daysBack = parseInt(req.query.days) || 7; // Default to 7 days
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - daysBack);
+        
+        console.log(`📊 Generating ${daysBack}-day progress summary since ${startDate.toISOString().split('T')[0]}`);
+        
+        // Get all boards (projects) with detailed info
+        const boardsQuery = `
+            query {
+                boards(limit: 100) {
+                    id
+                    name
+                    description
+                    state
+                    board_kind
+                    workspace {
+                        id
+                        name
+                    }
+                    groups {
+                        id
+                        title
+                        color
+                    }
+                    items_page(limit: 200) {
+                        items {
+                            id
+                            name
+                            state
+                            created_at
+                            updated_at
+                            column_values {
+                                id
+                                title
+                                text
+                                type
+                                value
+                            }
+                            updates {
+                                id
+                                text_body
+                                created_at
+                                creator {
+                                    name
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+        
+        const result = await makeMondayRequest(boardsQuery);
+        const boards = result.boards || [];
+        
+        // Analyze each project
+        const projectSummaries = boards.map(board => {
+            const items = board.items_page?.items || [];
+            
+            // Filter items updated in the specified period
+            const recentItems = items.filter(item => {
+                const updatedDate = new Date(item.updated_at);
+                return updatedDate >= startDate;
+            });
+            
+            // Get recent updates/activity
+            const recentUpdates = items.flatMap(item => 
+                (item.updates || []).filter(update => {
+                    const updateDate = new Date(update.created_at);
+                    return updateDate >= startDate;
+                })
+            );
+            
+            // Analyze status distribution
+            const statusCounts = items.reduce((acc, item) => {
+                const statusColumn = item.column_values?.find(col => 
+                    col.type === 'color' || col.title?.toLowerCase().includes('status')
+                );
+                const status = statusColumn?.text || item.state || 'Unknown';
+                acc[status] = (acc[status] || 0) + 1;
+                return acc;
+            }, {});
+            
+            // Calculate completion percentage
+            const totalItems = items.length;
+            const completedItems = items.filter(item => 
+                item.state === 'done' || 
+                item.column_values?.some(col => 
+                    col.text?.toLowerCase().includes('done') || 
+                    col.text?.toLowerCase().includes('complete')
+                )
+            ).length;
+            
+            const completionPercentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+            
+            // Recent activity score
+            const activityScore = recentItems.length + recentUpdates.length;
+            
+            return {
+                projectId: board.id,
+                projectName: board.name,
+                workspace: board.workspace?.name || 'Unknown',
+                boardKind: board.board_kind,
+                totalItems: totalItems,
+                completedItems: completedItems,
+                completionPercentage: completionPercentage,
+                recentActivity: {
+                    itemsUpdated: recentItems.length,
+                    newUpdates: recentUpdates.length,
+                    activityScore: activityScore
+                },
+                statusBreakdown: statusCounts,
+                recentUpdates: recentUpdates.slice(0, 5).map(update => ({
+                    text: update.text_body?.substring(0, 100) + '...',
+                    author: update.creator?.name,
+                    date: update.created_at
+                })),
+                lastActivity: items.length > 0 ? 
+                    new Date(Math.max(...items.map(item => new Date(item.updated_at)))).toISOString() : 
+                    null
+            };
+        });
+        
+        // Sort by activity score (most active first)
+        projectSummaries.sort((a, b) => b.recentActivity.activityScore - a.recentActivity.activityScore);
+        
+        // Generate overall statistics
+        const overallStats = {
+            totalProjects: boards.length,
+            activeProjects: projectSummaries.filter(p => p.recentActivity.activityScore > 0).length,
+            completedProjects: projectSummaries.filter(p => p.completionPercentage === 100).length,
+            averageCompletion: Math.round(
+                projectSummaries.reduce((sum, p) => sum + p.completionPercentage, 0) / projectSummaries.length
+            ),
+            totalItems: projectSummaries.reduce((sum, p) => sum + p.totalItems, 0),
+            totalCompletedItems: projectSummaries.reduce((sum, p) => sum + p.completedItems, 0),
+            totalRecentActivity: projectSummaries.reduce((sum, p) => sum + p.recentActivity.activityScore, 0)
+        };
+        
+        res.json({
+            success: true,
+            periodDays: daysBack,
+            startDate: startDate.toISOString().split('T')[0],
+            generatedAt: new Date().toISOString(),
+            overallStats,
+            projectSummaries,
+            insights: generateInsights(projectSummaries, overallStats)
+        });
+        
+    } catch (error) {
+        console.error('❌ Weekly summary error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get detailed project analysis
+app.get('/api/project-analysis/:boardId', async (req, res) => {
+    try {
+        const boardId = req.params.boardId;
+        const daysBack = parseInt(req.query.days) || 30;
+        
+        console.log(`🔍 Analyzing project ${boardId} for ${daysBack} days`);
+        
+        const query = `
+            query($boardId: [ID!]) {
+                boards(ids: $boardId) {
+                    id
+                    name
+                    description
+                    created_at
+                    workspace {
+                        name
+                    }
+                    groups {
+                        id
+                        title
+                        color
+                    }
+                    columns {
+                        id
+                        title
+                        type
+                        settings_str
+                    }
+                    items_page(limit: 500) {
+                        items {
+                            id
+                            name
+                            state
+                            created_at
+                            updated_at
+                            group {
+                                id
+                                title
+                            }
+                            column_values {
+                                id
+                                title
+                                text
+                                type
+                                value
+                            }
+                            updates {
+                                id
+                                text_body
+                                created_at
+                                creator {
+                                    name
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+        
+        const result = await makeMondayRequest(query, { boardId: [boardId] });
+        const board = result.boards?.[0];
+        
+        if (!board) {
+            return res.status(404).json({
+                success: false,
+                error: 'Project not found'
+            });
+        }
+        
+        const items = board.items_page?.items || [];
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - daysBack);
+        
+        // Timeline analysis
+        const timeline = [];
+        for (let i = daysBack; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            
+            const dayUpdates = items.flatMap(item => 
+                (item.updates || []).filter(update => 
+                    update.created_at.split('T')[0] === dateStr
+                )
+            ).length;
+            
+            const dayItemsUpdated = items.filter(item => 
+                item.updated_at.split('T')[0] === dateStr
+            ).length;
+            
+            timeline.push({
+                date: dateStr,
+                updatesCount: dayUpdates,
+                itemsUpdated: dayItemsUpdated,
+                totalActivity: dayUpdates + dayItemsUpdated
+            });
+        }
+        
+        // Group analysis
+        const groupAnalysis = board.groups?.map(group => {
+            const groupItems = items.filter(item => item.group?.id === group.id);
+            const completed = groupItems.filter(item => 
+                item.state === 'done' || 
+                item.column_values?.some(col => 
+                    col.text?.toLowerCase().includes('done') || 
+                    col.text?.toLowerCase().includes('complete')
+                )
+            ).length;
+            
+            return {
+                groupName: group.title,
+                totalItems: groupItems.length,
+                completedItems: completed,
+                completionPercentage: groupItems.length > 0 ? 
+                    Math.round((completed / groupItems.length) * 100) : 0
+            };
+        }) || [];
+        
+        // Recent activity details
+        const recentActivity = items.flatMap(item => 
+            (item.updates || []).map(update => ({
+                itemName: item.name,
+                updateText: update.text_body,
+                author: update.creator?.name,
+                date: update.created_at,
+                type: 'update'
+            }))
+        ).concat(
+            items.filter(item => new Date(item.updated_at) >= startDate).map(item => ({
+                itemName: item.name,
+                updateText: 'Item updated',
+                date: item.updated_at,
+                type: 'item_update'
+            }))
+        ).sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20);
+        
+        res.json({
+            success: true,
+            project: {
+                id: board.id,
+                name: board.name,
+                description: board.description,
+                workspace: board.workspace?.name,
+                createdAt: board.created_at
+            },
+            analysis: {
+                totalItems: items.length,
+                completedItems: items.filter(item => 
+                    item.state === 'done' || 
+                    item.column_values?.some(col => 
+                        col.text?.toLowerCase().includes('done') || 
+                        col.text?.toLowerCase().includes('complete')
+                    )
+                ).length,
+                groupAnalysis,
+                timeline,
+                recentActivity
+            },
+            periodDays: daysBack
+        });
+        
+    } catch (error) {
+        console.error('❌ Project analysis error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Generate insights from project data
+function generateInsights(projectSummaries, overallStats) {
+    const insights = [];
+    
+    // Most active projects
+    const mostActive = projectSummaries.slice(0, 3);
+    if (mostActive.length > 0) {
+        insights.push({
+            type: 'most_active',
+            title: 'Most Active Projects',
+            data: mostActive.map(p => ({ name: p.projectName, score: p.recentActivity.activityScore }))
+        });
+    }
+    
+    // Completion insights
+    const highCompletion = projectSummaries.filter(p => p.completionPercentage >= 80);
+    const lowCompletion = projectSummaries.filter(p => p.completionPercentage < 20 && p.totalItems > 0);
+    
+    if (highCompletion.length > 0) {
+        insights.push({
+            type: 'high_completion',
+            title: 'Near Completion',
+            data: highCompletion.map(p => ({ name: p.projectName, completion: p.completionPercentage }))
+        });
+    }
+    
+    if (lowCompletion.length > 0) {
+        insights.push({
+            type: 'needs_attention',
+            title: 'Projects Needing Attention',
+            data: lowCompletion.map(p => ({ name: p.projectName, completion: p.completionPercentage }))
+        });
+    }
+    
+    // Stalled projects (no recent activity)
+    const stalledProjects = projectSummaries.filter(p => 
+        p.recentActivity.activityScore === 0 && p.totalItems > 0
+    );
+    
+    if (stalledProjects.length > 0) {
+        insights.push({
+            type: 'stalled',
+            title: 'Stalled Projects',
+            data: stalledProjects.map(p => ({ name: p.projectName, lastActivity: p.lastActivity }))
+        });
+    }
+    
+    return insights;
+}
+
+console.log('📊 Weekly progress summary endpoints added:');
+console.log('   GET /api/weekly-summary?days=7 - Weekly progress summary');
+console.log('   GET /api/project-analysis/:boardId?days=30 - Detailed project analysis');
