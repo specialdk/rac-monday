@@ -389,15 +389,23 @@ query {
             showLoading('connectionResult');
             
             fetch('/test-connection', { method: 'POST' })
-                .then(response => response.json())
+                .then(response => {
+                    console.log('Response status:', response.status);
+                    return response.json();
+                })
                 .then(data => {
-                    if (data.success) {
+                    console.log('Response data:', data);
+                    if (data.success && data.user) {
                         currentUser = data.user;
+                        const planVersion = data.user.account?.plan?.version || 'Unknown';
+                        const accountName = data.user.account?.name || 'Unknown Account';
+                        
                         document.getElementById('connectionResult').innerHTML = 
                             '<div class="status connected">✅ Connection successful!</div>' +
-                            '<p><strong>User:</strong> ' + data.user.name + ' (' + data.user.email + ')</p>' +
-                            '<p><strong>Account:</strong> ' + data.user.account.name + '</p>' +
-                            '<p><strong>Plan:</strong> ' + data.user.account.plan.version + '</p>';
+                            '<p><strong>User:</strong> ' + (data.user.name || 'Unknown') + ' (' + (data.user.email || 'No email') + ')</p>' +
+                            '<p><strong>Account:</strong> ' + accountName + '</p>' +
+                            '<p><strong>Plan:</strong> ' + planVersion + '</p>' +
+                            '<p><strong>User ID:</strong> ' + (data.user.id || 'Unknown') + '</p>';
                         
                         document.getElementById('connectionStatus').innerHTML = 
                             '✅ Connected - Monday.com API ready';
@@ -411,6 +419,7 @@ query {
                     }
                 })
                 .catch(error => {
+                    console.error('Fetch error:', error);
                     document.getElementById('connectionResult').innerHTML = 
                         '<div class="status disconnected">❌ Network Error: ' + error.message + '</div>';
                 });
