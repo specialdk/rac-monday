@@ -790,74 +790,59 @@ app.get('/connection-status', (req, res) => {
     });
 });
 
-// Get all boards
+// Get all boards - SIMPLIFIED VERSION
 app.get('/api/boards', async (req, res) => {
     try {
+        // Try the most basic board query first
         const query = `
             query {
-                boards(limit: 25) {
+                boards(limit: 10) {
                     id
                     name
-                    description
                     state
-                    board_folder_id
-                    board_kind
-                    permissions
-                    groups {
-                        id
-                        title
-                        color
-                    }
-                    owners {
-                        id
-                        name
-                        email
-                    }
                 }
             }
         `;
 
         const result = await makeMondayRequest(query);
         
-        // Get items count separately for each board
-        const boardsWithItems = await Promise.all(
-            result.boards.map(async (board) => {
-                try {
-                    const itemsQuery = `
-                        query($boardId: [ID!]) {
-                            boards(ids: $boardId) {
-                                items_page(limit: 5) {
-                                    items {
-                                        id
-                                        name
-                                        state
-                                        created_at
-                                        updated_at
-                                    }
-                                }
-                            }
-                        }
-                    `;
-                    const itemsResult = await makeMondayRequest(itemsQuery, { boardId: [board.id] });
-                    const items = itemsResult.boards?.[0]?.items_page?.items || [];
-                    return { ...board, items };
-                } catch (error) {
-                    console.log(`Could not get items for board ${board.id}:`, error.message);
-                    return { ...board, items: [] };
-                }
-            })
-        );
-        
         res.json({
             success: true,
-            boards: boardsWithItems,
-            count: boardsWithItems.length
+            boards: result.boards || [],
+            count: result.boards?.length || 0,
+            message: 'Basic board info only - limited permissions'
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            error: error.message
-        });
+        // If even basic boards fail, try just getting account info
+        try {
+            const fallbackQuery = `
+                query {
+                    me {
+                        id
+                        name
+                        account {
+                            id
+                            name
+                        }
+                    }
+                }
+            `;
+            
+            const fallbackResult = await makeMondayRequest(fallbackQuery);
+            
+            res.json({
+                success: false,
+                error: error.message,
+                fallback: fallbackResult,
+                suggestion: 'Your account may need upgraded permissions for board access'
+            });
+        } catch (fallbackError) {
+            res.status(500).json({
+                success: false,
+                error: error.message,
+                fallbackError: fallbackError.message
+            });
+        }
     }
 });
 
@@ -1443,40 +1428,97 @@ app.post('/api/custom-query', async (req, res) => {
     }
 });
 
-// Debug endpoint
-app.get('/api/debug', (req, res) => {
-    res.json({
-        timestamp: new Date().toISOString(),
-        config: {
-            apiUrl: MONDAY_CONFIG.apiUrl,
-            apiVersion: MONDAY_CONFIG.apiVersion,
-            hasToken: !!MONDAY_CONFIG.apiToken,
-            rateLimit: MONDAY_CONFIG.rateLimit
-        },
-        cache: {
-            boardsCount: mondayCache.boards.length,
-            usersCount: mondayCache.users.length,
-            teamsCount: mondayCache.teams.length,
-            lastUpdated: mondayCache.lastUpdated
-        },
-        endpoints: [
-            'GET /api/boards',
-            'GET /api/board/:id',
-            'POST /api/create-board',
-            'GET /api/items',
-            'POST /api/create-item',
-            'POST /api/update-item',
-            'GET /api/users',
-            'GET /api/teams',
-            'GET /api/activity',
-            'GET /api/updates',
-            'POST /api/create-update',
-            'GET /api/stats',
-            'GET /api/logs',
-            'POST /api/custom-query'
-        ]
-    });
+// Test permissions endpoint
+app.get('/api/test-permissions', async (req, res) => {
+    try {
+        const tests = [];
+        
+        // Test 1: Basic user info (should always work)
+        try {
+            const userQuery = `query { me { id name email } }`;
+            const userResult = await makeMondayRequest(userQuery);
+            tests.push({ test: 'User Info', status: 'PASS', data: userResult.me });
+        } catch (error) {
+            tests.push({ test: 'User Info', status: 'FAIL', error: error.message });
+        }
+        
+        // Test 2: Account info
+        try {
+            const accountQuery = `query { me { account { id name plan { version } } } }`;
+            const accountResult = await makeMondayRequest(accountQuery);
+            tests.push({ test: 'Account Info', status: 'PASS', data: accountResult.me.account });
+        } catch (error) {
+            tests.push({ test: 'Account Info', status: 'FAIL', error: error.message });
+        }
+        
+        // Test 3: Basic boards access
+        try {
+            const boardsQuery = `query { boards(limit: 1) { id name } }`;
+            const boardsResult = await makeMondayRequest(boardsQuery);
+            tests.push({ test: 'Basic Boards', status: 'PASS', data: boardsResult.boards });
+        } catch (error) {
+            tests.push({ test: 'Basic Boards', status: 'FAIL', error: error.message });
+        }
+        
+        // Test 4: Users access
+        try {
+            const usersQuery = `query { users(limit: 1) { id name } }`;
+            const usersResult = await makeMondayRequest(usersQuery);
+            tests.push({ test: 'Users Access', status: 'PASS', data: usersResult.users });
+        } catch (error) {
+            tests.push({ test: 'Users Access', status: 'FAIL', error: error.message });
+        }
+        
+        // Test 5: Teams access
+        try {
+            const teamsQuery = `query { teams(limit: 1) { id name } }`;
+            const teamsResult = await makeMondayRequest(teamsQuery);
+            tests.push({ test: 'Teams Access', status: 'PASS', data: teamsResult.teams });
+        } catch (error) {
+            tests.push({ test: 'Teams Access', status: 'FAIL', error: error.message });
+        }
+        
+        const passedTests = tests.filter(t => t.status === 'PASS').length;
+        const totalTests = tests.length;
+        
+        res.json({
+            success: true,
+            summary: `${passedTests}/${totalTests} permission tests passed`,
+            tests,
+            recommendations: generateRecommendations(tests)
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
 });
+
+function generateRecommendations(tests) {
+    const recommendations = [];
+    
+    const failedTests = tests.filter(t => t.status === 'FAIL');
+    
+    if (failedTests.some(t => t.test === 'Basic Boards')) {
+        recommendations.push('Your account may need board access permissions or a plan upgrade');
+    }
+    
+    if (failedTests.some(t => t.test === 'Users Access')) {
+        recommendations.push('User management requires admin privileges or higher plan');
+    }
+    
+    if (failedTests.some(t => t.test === 'Teams Access')) {
+        recommendations.push('Team access requires admin privileges');
+    }
+    
+    if (failedTests.length === 0) {
+        recommendations.push('All permissions working! You have full API access');
+    }
+    
+    return recommendations;
+}
 
 // Health check
 app.get('/health', (req, res) => {
