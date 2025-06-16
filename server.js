@@ -448,14 +448,10 @@ query {
             boards.forEach(board => {
                 const itemCount = board.items ? board.items.length : 0;
                 const groupCount = board.groups ? board.groups.length : 0;
-                const boardIcon = board.board_kind === 'private' ? '🔒' : '📋';
-                const kindBadge = board.board_kind === 'private' ? 
-                    '<span style="background: #fef2f2; color: #dc2626; padding: 2px 6px; border-radius: 3px; font-size: 11px;">🔒 Private</span>' : 
-                    '<span style="background: #ecfdf5; color: #047857; padding: 2px 6px; border-radius: 3px; font-size: 11px;">🌐 Public</span>';
                 
                 html += '<div class="board-card">';
                 html += '<div class="board-header">';
-                html += '<div class="board-name">' + boardIcon + ' ' + board.name + ' ' + kindBadge + '</div>';
+                html += '<div class="board-name">📋 ' + board.name + '</div>';
                 html += '</div>';
                 html += '<p><strong>Description:</strong> ' + (board.description || 'No description') + '</p>';
                 html += '<div class="board-stats">';
@@ -463,14 +459,6 @@ query {
                 html += '<div class="stat">📁 ' + groupCount + ' groups</div>';
                 html += '<div class="stat">🆔 ' + board.id + '</div>';
                 html += '</div>';
-                
-                // Special highlighting for Traffic Light Report
-                if (board.name.includes('Traffic Light Report') || board.name.includes('Traffic Report')) {
-                    html += '<div style="background: #fef3c7; border: 1px solid #f59e0b; padding: 10px; border-radius: 6px; margin-top: 10px;">';
-                    html += '<strong>⭐ Found your Traffic Report board!</strong><br>';
-                    html += '<button onclick="getBoardDetails(\'' + board.id + '\')" style="margin-top: 5px;">📊 View Traffic Report Details</button>';
-                    html += '</div>';
-                }
                 
                 if (board.items && board.items.length > 0) {
                     html += '<h5>Recent Items:</h5>';
@@ -802,17 +790,146 @@ app.get('/connection-status', (req, res) => {
     });
 });
 
-// Get all boards - SIMPLE APPROACH WITH PRIVATE BOARD SUPPORT
+// Get all boards - ENHANCED TO INCLUDE MAIN WORKSPACE
 app.get('/api/boards', async (req, res) => {
     try {
-        const query = `
+        // Get workspaces the user has access to
+        const workspacesQuery = `
             query {
-                boards(limit: 100, state: all) {
+                workspaces(limit: 20) {
                     id
                     name
                     description
                     state
-                    board_folder_id
+                }
+            }
+        `;
+
+        const workspacesResult = await makeMondayRequest(workspacesQuery);
+        console.log('🏢 Workspaces found:', workspacesResult.workspaces?.map(w => w.name));
+
+        let allBoards = [];
+        
+        // Process all workspaces, including Main workspace
+        for (const workspace of workspacesResult.workspaces || []) {
+            try {
+                const boardsQuery = `
+                    query($workspaceId: ID!) {
+                        boards(workspace_ids: [$workspaceId], limit: 50) {
+                            id
+                            name
+                            description
+                            state
+                            board_kind
+                            workspace {
+                                id
+                                name
+                            }
+                            owners {
+                                id
+                                name
+                                email
+                            }
+                            groups {
+                                id
+                                title
+                                color
+                            }
+                        }
+                    }
+                `;
+
+                const boardsResult = await makeMondayRequest(boardsQuery, { workspaceId: workspace.id });
+                
+                if (boardsResult.boards && boardsResult.boards.length > 0) {
+                    allBoards = [...allBoards, ...boardsResult.boards];
+                    console.log(`📋 Found ${boardsResult.boards.length} boards in workspace "${workspace.name}"`);
+                    console.log(`   Board names: ${boardsResult.boards.map(b => b.name).join(', ')}`);
+                } else {
+                    console.log(`📋 No boards accessible in workspace "${workspace.name}"`);
+                }
+            } catch (workspaceError) {
+                console.log(`⚠️ Could not access workspace "${workspace.name}":`, workspaceError.message);
+                
+                // Try alternative method for Main workspace
+                if (workspace.name === 'Main workspace') {
+                    try {
+                        console.log('🔄 Trying alternative query for Main workspace...');
+                        const mainWorkspaceQuery = `
+                            query {
+                                boards(limit: 50) {
+                                    id
+                                    name
+                                    description
+                                    state
+                                    board_kind
+                                    workspace {
+                                        id
+                                        name
+                                    }
+                                    owners {
+                                        id
+                                        name
+                                        email
+                                    }
+                                    groups {
+                                        id
+                                        title
+                                        color
+                                    }
+                                }
+                            }
+                        `;
+                        
+                        const mainResult = await makeMondayRequest(mainWorkspaceQuery);
+                        const mainWorkspaceBoards = mainResult.boards?.filter(b => 
+                            b.workspace?.name === 'Main workspace' || 
+                            b.workspace?.id === '1110698'
+                        ) || [];
+                        
+                        if (mainWorkspaceBoards.length > 0) {
+                            allBoards = [...allBoards, ...mainWorkspaceBoards];
+                            console.log(`📋 Found ${mainWorkspaceBoards.length} boards in Main workspace via alternative method`);
+                            console.log(`   Board names: ${mainWorkspaceBoards.map(b => b.name).join(', ')}`);
+                        }
+                    } catch (alternativeError) {
+                        console.log('⚠️ Alternative method for Main workspace also failed:', alternativeError.message);
+                    }
+                }
+            }
+        }
+        
+        console.log('📊 Total boards found:', allBoards.length);
+        console.log('📝 All board names:', allBoards.map(b => b.name));
+        
+        res.json({
+            success: true,
+            boards: allBoards,
+            count: allBoards.length,
+            workspaces: workspacesResult.workspaces?.map(w => w.name) || [],
+            note: 'Retrieved boards from accessible workspaces, including Main workspace'
+        });
+    } catch (error) {
+        console.error('❌ Boards API error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get specific board details
+app.get('/api/board/:id', async (req, res) => {
+    try {
+        const boardId = req.params.id;
+        
+        const query = `
+            query($boardId: [ID!]) {
+                boards(ids: $boardId) {
+                    id
+                    name
+                    description
+                    state
                     board_kind
                     permissions
                     groups {
@@ -820,10 +937,723 @@ app.get('/api/boards', async (req, res) => {
                         title
                         color
                     }
+                    columns {
+                        id
+                        title
+                        type
+                        settings_str
+                    }
                     owners {
+                        id
+                        name
+                        email
+                    }
+                    subscribers {
+                        id
+                        name
+                        email
+                    }
+                    items_page(limit: 25) {
+                        items {
+                            id
+                            name
+                            state
+                            column_values {
+                                id
+                                text
+                                title
+                                type
+                                value
+                            }
+                        }
+                    }
+                }
+            }
+        `;
+
+        const result = await makeMondayRequest(query, { boardId: [boardId] });
+        
+        res.json({
+            success: true,
+            board: result.boards?.[0] || null
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Create new board
+app.post('/api/create-board', async (req, res) => {
+    try {
+        const { name, description, boardKind } = req.body;
+        
+        const mutation = `
+            mutation($boardName: String!, $boardKind: BoardKind, $description: String) {
+                create_board(
+                    board_name: $boardName,
+                    board_kind: $boardKind,
+                    description: $description
+                ) {
+                    id
+                    name
+                    description
+                }
+            }
+        `;
+
+        const variables = {
+            boardName: name,
+            boardKind: boardKind || 'public',
+            description: description || null
+        };
+
+        const result = await makeMondayRequest(mutation, variables);
+        
+        res.json({
+            success: true,
+            board: result.create_board
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get all items - FIXED FOR ACCESSIBLE ITEMS
+app.get('/api/items', async (req, res) => {
+    try {
+        const query = `
+            query {
+                items_page(limit: 50) {
+                    items {
+                        id
+                        name
+                        state
+                        created_at
+                        updated_at
+                        board {
+                            id
+                            name
+                            workspace {
+                                id
+                                name
+                            }
+                        }
+                        group {
+                            id
+                            title
+                        }
+                        column_values {
+                            id
+                            text
+                            title
+                            type
+                        }
+                        creator {
+                            id
+                            name
+                        }
+                    }
+                }
+            }
+        `;
+
+        const result = await makeMondayRequest(query);
+        
+        console.log('📝 Items API response:', {
+            totalItems: result.items_page?.items?.length || 0,
+            uniqueBoards: [...new Set(result.items_page?.items?.map(i => i.board?.name) || [])],
+            sampleItems: result.items_page?.items?.slice(0, 3)?.map(i => i.name) || []
+        });
+        
+        res.json({
+            success: true,
+            items: result.items_page?.items || [],
+            count: result.items_page?.items?.length || 0,
+            boardsSeen: [...new Set(result.items_page?.items?.map(i => i.board?.name) || [])]
+        });
+    } catch (error) {
+        console.error('❌ Items API error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Create new item
+app.post('/api/create-item', async (req, res) => {
+    try {
+        const { boardId, itemName, groupId } = req.body;
+        
+        const mutation = `
+            mutation($boardId: ID!, $itemName: String!, $groupId: String) {
+                create_item(
+                    board_id: $boardId,
+                    item_name: $itemName,
+                    group_id: $groupId
+                ) {
+                    id
+                    name
+                    state
+                    board {
+                        id
+                        name
+                    }
+                }
+            }
+        `;
+
+        const variables = {
+            boardId: boardId,
+            itemName: itemName,
+            groupId: groupId || null
+        };
+
+        const result = await makeMondayRequest(mutation, variables);
+        
+        res.json({
+            success: true,
+            item: result.create_item
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Update item
+app.post('/api/update-item', async (req, res) => {
+    try {
+        const { itemId, name, columnValues } = req.body;
+        
+        let mutation = '';
+        let variables = {};
+
+        if (name) {
+            mutation = `
+                mutation($itemId: ID!, $itemName: String!) {
+                    change_simple_column_value(
+                        item_id: $itemId,
+                        column_id: "name",
+                        value: $itemName
+                    ) {
+                        id
+                        name
+                    }
+                }
+            `;
+            variables = { itemId, itemName: name };
+        } else if (columnValues) {
+            mutation = `
+                mutation($itemId: ID!, $columnValues: JSON!) {
+                    change_multiple_column_values(
+                        item_id: $itemId,
+                        column_values: $columnValues
+                    ) {
+                        id
+                        name
+                        column_values {
+                            id
+                            text
+                            title
+                        }
+                    }
+                }
+            `;
+            variables = { itemId, columnValues: JSON.stringify(columnValues) };
+        }
+
+        const result = await makeMondayRequest(mutation, variables);
+        
+        res.json({
+            success: true,
+            item: result.change_simple_column_value || result.change_multiple_column_values
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get users
+app.get('/api/users', async (req, res) => {
+    try {
+        const query = `
+            query {
+                users(limit: 50) {
+                    id
+                    name
+                    email
+                    title
+                    birthday
+                    country_code
+                    is_admin
+                    is_guest
+                    enabled
+                    created_at
+                    time_zone_identifier
+                    teams {
+                        id
+                        name
+                    }
+                }
+            }
+        `;
+
+        const result = await makeMondayRequest(query);
+        
+        res.json({
+            success: true,
+            users: result.users || [],
+            count: result.users?.length || 0
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get teams
+app.get('/api/teams', async (req, res) => {
+    try {
+        const query = `
+            query {
+                teams(limit: 25) {
+                    id
+                    name
+                    picture_url
+                    users {
                         id
                         name
                         email
                     }
                 }
             }
+        `;
+
+        const result = await makeMondayRequest(query);
+        
+        res.json({
+            success: true,
+            teams: result.teams || [],
+            count: result.teams?.length || 0
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get activity logs
+app.get('/api/activity', async (req, res) => {
+    try {
+        const query = `
+            query {
+                activity_logs(limit: 50) {
+                    id
+                    event
+                    created_at
+                    user_id
+                    account_id
+                    data
+                }
+            }
+        `;
+
+        const result = await makeMondayRequest(query);
+        
+        res.json({
+            success: true,
+            logs: result.activity_logs || [],
+            count: result.activity_logs?.length || 0
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get updates
+app.get('/api/updates', async (req, res) => {
+    try {
+        const query = `
+            query {
+                updates(limit: 50) {
+                    id
+                    body
+                    text_body
+                    created_at
+                    updated_at
+                    creator {
+                        id
+                        name
+                    }
+                    item {
+                        id
+                        name
+                        board {
+                            id
+                            name
+                        }
+                    }
+                    replies {
+                        id
+                        body
+                        created_at
+                        creator {
+                            id
+                            name
+                        }
+                    }
+                }
+            }
+        `;
+
+        const result = await makeMondayRequest(query);
+        
+        res.json({
+            success: true,
+            updates: result.updates || [],
+            count: result.updates?.length || 0
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Create update
+app.post('/api/create-update', async (req, res) => {
+    try {
+        const { itemId, text } = req.body;
+        
+        const mutation = `
+            mutation($itemId: ID!, $body: String!) {
+                create_update(
+                    item_id: $itemId,
+                    body: $body
+                ) {
+                    id
+                    body
+                    text_body
+                    created_at
+                    creator {
+                        id
+                        name
+                    }
+                }
+            }
+        `;
+
+        const result = await makeMondayRequest(mutation, { itemId, body: text });
+        
+        res.json({
+            success: true,
+            update: result.create_update
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get workspace statistics
+app.get('/api/stats', async (req, res) => {
+    try {
+        // Get comprehensive stats
+        const query = `
+            query {
+                boards(limit: 1000) {
+                    id
+                    state
+                    board_kind
+                    items {
+                        id
+                        state
+                    }
+                }
+                users {
+                    id
+                    enabled
+                    is_admin
+                    is_guest
+                }
+                teams {
+                    id
+                }
+            }
+        `;
+
+        const result = await makeMondayRequest(query);
+        
+        // Calculate statistics
+        const boards = result.boards || [];
+        const users = result.users || [];
+        const teams = result.teams || [];
+        
+        const stats = {
+            boards: {
+                total: boards.length,
+                active: boards.filter(b => b.state === 'active').length,
+                archived: boards.filter(b => b.state === 'archived').length,
+                public: boards.filter(b => b.board_kind === 'public').length,
+                private: boards.filter(b => b.board_kind === 'private').length
+            },
+            items: {
+                total: boards.reduce((sum, board) => sum + (board.items?.length || 0), 0),
+                active: boards.reduce((sum, board) => 
+                    sum + (board.items?.filter(item => item.state === 'active').length || 0), 0),
+                done: boards.reduce((sum, board) => 
+                    sum + (board.items?.filter(item => item.state === 'done').length || 0), 0)
+            },
+            users: {
+                total: users.length,
+                active: users.filter(u => u.enabled).length,
+                admins: users.filter(u => u.is_admin).length,
+                guests: users.filter(u => u.is_guest).length
+            },
+            teams: {
+                total: teams.length
+            }
+        };
+        
+        res.json({
+            success: true,
+            statistics: stats,
+            generatedAt: new Date().toISOString()
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Get activity logs
+app.get('/api/logs', async (req, res) => {
+    try {
+        const query = `
+            query {
+                activity_logs(limit: 100) {
+                    id
+                    event
+                    created_at
+                    user_id
+                    account_id
+                    data
+                }
+            }
+        `;
+
+        const result = await makeMondayRequest(query);
+        
+        res.json({
+            success: true,
+            logs: result.activity_logs || [],
+            count: result.activity_logs?.length || 0
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+// Execute custom GraphQL query
+app.post('/api/custom-query', async (req, res) => {
+    try {
+        const { query, variables } = req.body;
+        
+        if (!query) {
+            throw new Error('Query is required');
+        }
+        
+        const result = await makeMondayRequest(query, variables || {});
+        
+        res.json({
+            success: true,
+            data: result,
+            query: query,
+            variables: variables || {}
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            query: req.body.query
+        });
+    }
+});
+
+// Test permissions endpoint
+app.get('/api/test-permissions', async (req, res) => {
+    try {
+        const tests = [];
+        
+        // Test 1: Basic user info (should always work)
+        try {
+            const userQuery = `query { me { id name email } }`;
+            const userResult = await makeMondayRequest(userQuery);
+            tests.push({ test: 'User Info', status: 'PASS', data: userResult.me });
+        } catch (error) {
+            tests.push({ test: 'User Info', status: 'FAIL', error: error.message });
+        }
+        
+        // Test 2: Account info
+        try {
+            const accountQuery = `query { me { account { id name plan { version } } } }`;
+            const accountResult = await makeMondayRequest(accountQuery);
+            tests.push({ test: 'Account Info', status: 'PASS', data: accountResult.me.account });
+        } catch (error) {
+            tests.push({ test: 'Account Info', status: 'FAIL', error: error.message });
+        }
+        
+        // Test 3: Basic boards access
+        try {
+            const boardsQuery = `query { boards(limit: 1) { id name } }`;
+            const boardsResult = await makeMondayRequest(boardsQuery);
+            tests.push({ test: 'Basic Boards', status: 'PASS', data: boardsResult.boards });
+        } catch (error) {
+            tests.push({ test: 'Basic Boards', status: 'FAIL', error: error.message });
+        }
+        
+        // Test 4: Users access
+        try {
+            const usersQuery = `query { users(limit: 1) { id name } }`;
+            const usersResult = await makeMondayRequest(usersQuery);
+            tests.push({ test: 'Users Access', status: 'PASS', data: usersResult.users });
+        } catch (error) {
+            tests.push({ test: 'Users Access', status: 'FAIL', error: error.message });
+        }
+        
+        // Test 5: Teams access
+        try {
+            const teamsQuery = `query { teams(limit: 1) { id name } }`;
+            const teamsResult = await makeMondayRequest(teamsQuery);
+            tests.push({ test: 'Teams Access', status: 'PASS', data: teamsResult.teams });
+        } catch (error) {
+            tests.push({ test: 'Teams Access', status: 'FAIL', error: error.message });
+        }
+        
+        const passedTests = tests.filter(t => t.status === 'PASS').length;
+        const totalTests = tests.length;
+        
+        res.json({
+            success: true,
+            summary: `${passedTests}/${totalTests} permission tests passed`,
+            tests,
+            recommendations: generateRecommendations(tests)
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
+function generateRecommendations(tests) {
+    const recommendations = [];
+    
+    const failedTests = tests.filter(t => t.status === 'FAIL');
+    
+    if (failedTests.some(t => t.test === 'Basic Boards')) {
+        recommendations.push('Your account may need board access permissions or a plan upgrade');
+    }
+    
+    if (failedTests.some(t => t.test === 'Users Access')) {
+        recommendations.push('User management requires admin privileges or higher plan');
+    }
+    
+    if (failedTests.some(t => t.test === 'Teams Access')) {
+        recommendations.push('Team access requires admin privileges');
+    }
+    
+    if (failedTests.length === 0) {
+        recommendations.push('All permissions working! You have full API access');
+    }
+    
+    return recommendations;
+}
+
+// Debug endpoint - RESTORED
+app.get('/api/debug', (req, res) => {
+    res.json({
+        timestamp: new Date().toISOString(),
+        config: {
+            apiUrl: MONDAY_CONFIG.apiUrl,
+            apiVersion: MONDAY_CONFIG.apiVersion,
+            hasToken: !!MONDAY_CONFIG.apiToken,
+            rateLimit: MONDAY_CONFIG.rateLimit
+        },
+        cache: {
+            boardsCount: mondayCache.boards.length,
+            usersCount: mondayCache.users.length,
+            teamsCount: mondayCache.teams.length,
+            lastUpdated: mondayCache.lastUpdated
+        },
+        endpoints: [
+            'GET /api/boards',
+            'GET /api/board/:id', 
+            'POST /api/create-board',
+            'GET /api/items',
+            'POST /api/create-item',
+            'POST /api/update-item',
+            'GET /api/users',
+            'GET /api/teams',
+            'GET /api/activity',
+            'GET /api/updates',
+            'POST /api/create-update',
+            'GET /api/stats',
+            'GET /api/logs',
+            'POST /api/custom-query',
+            'GET /api/test-permissions'
+        ],
+        permissionTests: 'Available at /api/test-permissions'
+    });
+});
+
+// Health check
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        hasApiToken: !!MONDAY_CONFIG.apiToken,
+        service: 'Monday.com API MCP'
+    });
+});
+
+app.listen(port, () => {
+    console.log(`📋 Monday.com API MCP running on port ${port}`);
+    console.log(`📊 Dashboard: http://localhost:${port}`);
+    console.log(`🔗 GraphQL API: ${MONDAY_CONFIG.apiUrl}`);
+    console.log(`🎯 Ready for Monday.com integration!`);
+    
+    if (!MONDAY_CONFIG.apiToken) {
+        console.warn('⚠️  Please set MONDAY_API_TOKEN environment variable');
+        console.warn('📋 Get your token from: https://monday.com → Profile → Developer → My Access Tokens');
+    }
+});
