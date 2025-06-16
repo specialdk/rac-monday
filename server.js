@@ -790,17 +790,22 @@ app.get('/connection-status', (req, res) => {
     });
 });
 
-// Get all boards - FIXED SIMPLE VERSION
+// Get all boards - FIXED FOR MEMBER ACCESS
 app.get('/api/boards', async (req, res) => {
     try {
+        // Get boards from workspaces the user has access to
         const query = `
             query {
-                boards(limit: 25) {
+                boards(limit: 50, order_by: used_at) {
                     id
                     name
                     description
                     state
                     board_kind
+                    workspace {
+                        id
+                        name
+                    }
                     owners {
                         id
                         name
@@ -817,12 +822,19 @@ app.get('/api/boards', async (req, res) => {
 
         const result = await makeMondayRequest(query);
         
+        console.log('📊 Boards API response:', {
+            totalBoards: result.boards?.length || 0,
+            boardNames: result.boards?.map(b => b.name) || []
+        });
+        
         res.json({
             success: true,
             boards: result.boards || [],
-            count: result.boards?.length || 0
+            count: result.boards?.length || 0,
+            note: 'Showing all accessible boards (not just owned boards)'
         });
     } catch (error) {
+        console.error('❌ Boards API error:', error);
         res.status(500).json({
             success: false,
             error: error.message
@@ -936,7 +948,7 @@ app.post('/api/create-board', async (req, res) => {
     }
 });
 
-// Get all items
+// Get all items - FIXED FOR ACCESSIBLE ITEMS
 app.get('/api/items', async (req, res) => {
     try {
         const query = `
@@ -951,6 +963,10 @@ app.get('/api/items', async (req, res) => {
                         board {
                             id
                             name
+                            workspace {
+                                id
+                                name
+                            }
                         }
                         group {
                             id
@@ -966,11 +982,6 @@ app.get('/api/items', async (req, res) => {
                             id
                             name
                         }
-                        updates {
-                            id
-                            body
-                            created_at
-                        }
                     }
                 }
             }
@@ -978,12 +989,20 @@ app.get('/api/items', async (req, res) => {
 
         const result = await makeMondayRequest(query);
         
+        console.log('📝 Items API response:', {
+            totalItems: result.items_page?.items?.length || 0,
+            uniqueBoards: [...new Set(result.items_page?.items?.map(i => i.board?.name) || [])],
+            sampleItems: result.items_page?.items?.slice(0, 3)?.map(i => i.name) || []
+        });
+        
         res.json({
             success: true,
             items: result.items_page?.items || [],
-            count: result.items_page?.items?.length || 0
+            count: result.items_page?.items?.length || 0,
+            boardsSeen: [...new Set(result.items_page?.items?.map(i => i.board?.name) || [])]
         });
     } catch (error) {
+        console.error('❌ Items API error:', error);
         res.status(500).json({
             success: false,
             error: error.message
