@@ -808,13 +808,6 @@ app.get('/api/boards', async (req, res) => {
                         title
                         color
                     }
-                    items(limit: 5) {
-                        id
-                        name
-                        state
-                        created_at
-                        updated_at
-                    }
                     owners {
                         id
                         name
@@ -826,10 +819,39 @@ app.get('/api/boards', async (req, res) => {
 
         const result = await makeMondayRequest(query);
         
+        // Get items count separately for each board
+        const boardsWithItems = await Promise.all(
+            result.boards.map(async (board) => {
+                try {
+                    const itemsQuery = `
+                        query($boardId: [ID!]) {
+                            boards(ids: $boardId) {
+                                items_page(limit: 5) {
+                                    items {
+                                        id
+                                        name
+                                        state
+                                        created_at
+                                        updated_at
+                                    }
+                                }
+                            }
+                        }
+                    `;
+                    const itemsResult = await makeMondayRequest(itemsQuery, { boardId: [board.id] });
+                    const items = itemsResult.boards?.[0]?.items_page?.items || [];
+                    return { ...board, items };
+                } catch (error) {
+                    console.log(`Could not get items for board ${board.id}:`, error.message);
+                    return { ...board, items: [] };
+                }
+            })
+        );
+        
         res.json({
             success: true,
-            boards: result.boards || [],
-            count: result.boards?.length || 0
+            boards: boardsWithItems,
+            count: boardsWithItems.length
         });
     } catch (error) {
         res.status(500).json({
