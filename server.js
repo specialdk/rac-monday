@@ -1,4 +1,4 @@
-// Monday.com API MCP Connection - Complete Setup with Traffic Report Integration
+// Monday.com API MCP Connection - Complete Setup
 // File: server.js
 
 const express = require('express');
@@ -274,9 +274,8 @@ app.get('/', (req, res) => {
             <!-- Boards Tab -->
             <div id="boards-tab" class="tab-content active">
                 <div class="button-grid">
-                    <button onclick="getBoards()" disabled id="btn-boards">📋 Get All Boards (Inc. Private)</button>
-                    <button onclick="getTrafficReportOnly()" disabled id="btn-traffic-report">🚦 Get Traffic Report Only</button>
-                    <button onclick="getBoardDetails()" disabled id="btn-board-details">🔍 Get Board Details (by ID)</button>
+                    <button onclick="getBoards()" disabled id="btn-boards">📋 Get All Boards</button>
+                    <button onclick="getBoardDetails()" disabled id="btn-board-details">🔍 Get Board Details</button>
                     <button onclick="createBoard()" disabled id="btn-create-board">➕ Create New Board</button>
                 </div>
                 <div id="boardsResult"></div>
@@ -404,22 +403,15 @@ query {
 
         // Display boards in a nice format
         function displayBoards(boards) {
-            let html = '<h4>📋 Your Active Boards (' + boards.length + ')</h4>';
+            let html = '<h4>📋 Your Boards (' + boards.length + ')</h4>';
             
-            // Sort boards by name for easier finding
-            const sortedBoards = [...boards].sort((a, b) => a.name.localeCompare(b.name));
-            
-            sortedBoards.forEach(board => {
+            boards.forEach(board => {
                 const itemCount = board.items ? board.items.length : 0;
                 const groupCount = board.groups ? board.groups.length : 0;
-                const boardIcon = board.board_kind === 'private' ? '🔒' : '📋';
-                const kindBadge = board.board_kind === 'private' ? 
-                    '<span style="background: #fef2f2; color: #dc2626; padding: 2px 6px; border-radius: 3px; font-size: 11px;">🔒 Private</span>' : 
-                    '<span style="background: #ecfdf5; color: #047857; padding: 2px 6px; border-radius: 3px; font-size: 11px;">🌐 Public</span>';
                 
                 html += '<div class="board-card">';
                 html += '<div class="board-header">';
-                html += '<div class="board-name">' + boardIcon + ' ' + board.name + ' ' + kindBadge + '</div>';
+                html += '<div class="board-name">📋 ' + board.name + '</div>';
                 html += '</div>';
                 html += '<p><strong>Description:</strong> ' + (board.description || 'No description') + '</p>';
                 html += '<div class="board-stats">';
@@ -427,14 +419,6 @@ query {
                 html += '<div class="stat">📁 ' + groupCount + ' groups</div>';
                 html += '<div class="stat">🆔 ' + board.id + '</div>';
                 html += '</div>';
-                
-                // Special highlighting for Traffic Light Report
-                if (board.name.includes('Traffic Light Report') || board.name.includes('Traffic Report')) {
-                    html += '<div style="background: #fef3c7; border: 1px solid #f59e0b; padding: 10px; border-radius: 6px; margin-top: 10px;">';
-                    html += '<strong>⭐ Found your Traffic Report board!</strong><br>';
-                    html += '<button onclick="getTrafficReportDetails(\'' + board.id + '\')" style="margin-top: 5px;">📊 View Traffic Report Details</button>';
-                    html += '</div>';
-                }
                 
                 if (board.items && board.items.length > 0) {
                     html += '<h5>Recent Items:</h5>';
@@ -452,109 +436,7 @@ query {
             document.getElementById('boardsResult').innerHTML = html;
         }
 
-        // Get only Traffic Report board
-        function getTrafficReportOnly() {
-            showLoading('boardsResult');
-            
-            // Use the known Traffic Report board ID
-            fetch('/api/board/1996823202')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.board) {
-                        displayTrafficReport(data.board);
-                    } else {
-                        document.getElementById('boardsResult').innerHTML = 
-                            '<div class="status disconnected">❌ Error: ' + (data.error || 'Failed to get Traffic Report') + '</div>';
-                    }
-                });
-        }
-
-        // Get Traffic Report specific details
-        function getTrafficReportDetails(boardId) {
-            showLoading('boardsResult');
-            
-            fetch('/api/board/' + boardId)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.board) {
-                        displayTrafficReport(data.board);
-                    } else {
-                        document.getElementById('boardsResult').innerHTML = 
-                            '<div class="status disconnected">❌ Error: ' + (data.error || 'Failed to get Traffic Report details') + '</div>';
-                    }
-                });
-        }
-
-        // Display Traffic Report in a detailed format
-        function displayTrafficReport(board) {
-            let html = '<div style="background: #f0f9ff; border: 2px solid #0369a1; border-radius: 8px; padding: 20px; margin: 10px 0;">';
-            html += '<h3>🚦 ' + board.name + ' - Detailed View</h3>';
-            html += '<p><strong>Board ID:</strong> ' + board.id + '</p>';
-            html += '<p><strong>Description:</strong> ' + (board.description || 'No description') + '</p>';
-            html += '<p><strong>Type:</strong> ' + (board.board_kind === 'private' ? '🔒 Private' : '🌐 Public') + '</p>';
-            
-            if (board.groups && board.groups.length > 0) {
-                html += '<h4>📁 Groups in this Board:</h4>';
-                board.groups.forEach(group => {
-                    html += '<div style="background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 15px; margin: 10px 0;">';
-                    html += '<h5 style="margin: 0 0 10px 0; color: ' + (group.color || '#374151') + ';">📂 ' + group.title + '</h5>';
-                    
-                    if (group.items && group.items.length > 0) {
-                        html += '<h6>Items in this group:</h6>';
-                        group.items.forEach(item => {
-                            html += '<div class="item-row">';
-                            html += '<span>📝 ' + item.name + '</span>';
-                            html += '<span class="status-label status-' + (item.state || 'working') + '">' + (item.state || 'Active') + '</span>';
-                            html += '</div>';
-                            
-                            // Show column values if available
-                            if (item.column_values && item.column_values.length > 0) {
-                                html += '<div style="margin-left: 20px; margin-top: 5px; font-size: 12px; color: #6b7280;">';
-                                item.column_values.forEach(col => {
-                                    if (col.text && col.text.trim()) {
-                                        html += '<span style="margin-right: 15px;"><strong>' + col.title + ':</strong> ' + col.text + '</span>';
-                                    }
-                                });
-                                html += '</div>';
-                            }
-                        });
-                    } else {
-                        html += '<p style="color: #6b7280; font-style: italic;">No items in this group</p>';
-                    }
-                    html += '</div>';
-                });
-            }
-            
-            html += '<div style="margin-top: 20px;">';
-            html += '<button onclick="getBoards()" style="margin-right: 10px;">← Back to All Boards</button>';
-            html += '<button onclick="exportTrafficData(\'' + board.id + '\')">📊 Export Traffic Data</button>';
-            html += '</div>';
-            html += '</div>';
-            
-            document.getElementById('boardsResult').innerHTML = html;
-        }
-
-        // Export Traffic Report data
-        function exportTrafficData(boardId) {
-            fetch('/api/board/' + boardId)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Create downloadable JSON
-                        const dataStr = JSON.stringify(data.board, null, 2);
-                        const dataBlob = new Blob([dataStr], {type: 'application/json'});
-                        
-                        const link = document.createElement('a');
-                        link.href = URL.createObjectURL(dataBlob);
-                        link.download = 'traffic-report-' + new Date().toISOString().split('T')[0] + '.json';
-                        link.click();
-                        
-                        alert('✅ Traffic Report data exported successfully!');
-                    }
-                });
-        }
-
-        // Get board details (original function for manual ID entry)
+        // Get board details
         function getBoardDetails() {
             const boardId = prompt('Enter Board ID to get details:');
             if (!boardId) return;
@@ -793,7 +675,7 @@ query {
 
         function enableAllButtons() {
             const buttons = [
-                'btn-boards', 'btn-traffic-report', 'btn-board-details', 'btn-create-board',
+                'btn-boards', 'btn-board-details', 'btn-create-board',
                 'btn-items', 'btn-create-item', 'btn-update-item',
                 'btn-users', 'btn-teams', 'btn-activity',
                 'btn-updates', 'btn-create-update',
@@ -855,12 +737,12 @@ app.get('/connection-status', (req, res) => {
     });
 });
 
-// Get all boards (including private boards)
+// Get all boards
 app.get('/api/boards', async (req, res) => {
     try {
         const query = `
             query {
-                boards(limit: 100, state: all) {
+                boards(limit: 25) {
                     id
                     name
                     description
@@ -891,14 +773,10 @@ app.get('/api/boards', async (req, res) => {
 
         const result = await makeMondayRequest(query);
 
-        // Filter to only show active boards, but include both public and private
-        const activeBoards = result.boards?.filter(board => board.state === 'active') || [];
-
         res.json({
             success: true,
-            boards: activeBoards,
-            count: activeBoards.length,
-            total: result.boards?.length || 0
+            boards: result.boards || [],
+            count: result.boards?.length || 0
         });
     } catch (error) {
         res.status(500).json({
