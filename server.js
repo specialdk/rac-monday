@@ -790,16 +790,27 @@ app.get('/connection-status', (req, res) => {
     });
 });
 
-// Get all boards - SIMPLIFIED VERSION
+// Get all boards - FIXED SIMPLE VERSION
 app.get('/api/boards', async (req, res) => {
     try {
-        // Try the most basic board query first
         const query = `
             query {
-                boards(limit: 10) {
+                boards(limit: 25) {
                     id
                     name
+                    description
                     state
+                    board_kind
+                    owners {
+                        id
+                        name
+                        email
+                    }
+                    groups {
+                        id
+                        title
+                        color
+                    }
                 }
             }
         `;
@@ -809,40 +820,13 @@ app.get('/api/boards', async (req, res) => {
         res.json({
             success: true,
             boards: result.boards || [],
-            count: result.boards?.length || 0,
-            message: 'Basic board info only - limited permissions'
+            count: result.boards?.length || 0
         });
     } catch (error) {
-        // If even basic boards fail, try just getting account info
-        try {
-            const fallbackQuery = `
-                query {
-                    me {
-                        id
-                        name
-                        account {
-                            id
-                            name
-                        }
-                    }
-                }
-            `;
-            
-            const fallbackResult = await makeMondayRequest(fallbackQuery);
-            
-            res.json({
-                success: false,
-                error: error.message,
-                fallback: fallbackResult,
-                suggestion: 'Your account may need upgraded permissions for board access'
-            });
-        } catch (fallbackError) {
-            res.status(500).json({
-                success: false,
-                error: error.message,
-                fallbackError: fallbackError.message
-            });
-        }
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
     }
 });
 
