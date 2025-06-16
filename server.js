@@ -790,13 +790,13 @@ app.get('/connection-status', (req, res) => {
     });
 });
 
-// Get all boards - FIXED TO USE WORKSPACES
+// Get all boards - ENHANCED TO INCLUDE MAIN WORKSPACE
 app.get('/api/boards', async (req, res) => {
     try {
-        // First get workspaces the user has access to
+        // Get workspaces the user has access to
         const workspacesQuery = `
             query {
-                workspaces(limit: 10) {
+                workspaces(limit: 20) {
                     id
                     name
                     description
@@ -808,9 +808,9 @@ app.get('/api/boards', async (req, res) => {
         const workspacesResult = await makeMondayRequest(workspacesQuery);
         console.log('🏢 Workspaces found:', workspacesResult.workspaces?.map(w => w.name));
 
-        // Then get boards from each workspace
         let allBoards = [];
         
+        // Process all workspaces, including Main workspace
         for (const workspace of workspacesResult.workspaces || []) {
             try {
                 const boardsQuery = `
@@ -841,23 +841,73 @@ app.get('/api/boards', async (req, res) => {
 
                 const boardsResult = await makeMondayRequest(boardsQuery, { workspaceId: workspace.id });
                 
-                if (boardsResult.boards) {
+                if (boardsResult.boards && boardsResult.boards.length > 0) {
                     allBoards = [...allBoards, ...boardsResult.boards];
                     console.log(`📋 Found ${boardsResult.boards.length} boards in workspace "${workspace.name}"`);
+                    console.log(`   Board names: ${boardsResult.boards.map(b => b.name).join(', ')}`);
+                } else {
+                    console.log(`📋 No boards accessible in workspace "${workspace.name}"`);
                 }
             } catch (workspaceError) {
                 console.log(`⚠️ Could not access workspace "${workspace.name}":`, workspaceError.message);
+                
+                // Try alternative method for Main workspace
+                if (workspace.name === 'Main workspace') {
+                    try {
+                        console.log('🔄 Trying alternative query for Main workspace...');
+                        const mainWorkspaceQuery = `
+                            query {
+                                boards(limit: 50) {
+                                    id
+                                    name
+                                    description
+                                    state
+                                    board_kind
+                                    workspace {
+                                        id
+                                        name
+                                    }
+                                    owners {
+                                        id
+                                        name
+                                        email
+                                    }
+                                    groups {
+                                        id
+                                        title
+                                        color
+                                    }
+                                }
+                            }
+                        `;
+                        
+                        const mainResult = await makeMondayRequest(mainWorkspaceQuery);
+                        const mainWorkspaceBoards = mainResult.boards?.filter(b => 
+                            b.workspace?.name === 'Main workspace' || 
+                            b.workspace?.id === '1110698'
+                        ) || [];
+                        
+                        if (mainWorkspaceBoards.length > 0) {
+                            allBoards = [...allBoards, ...mainWorkspaceBoards];
+                            console.log(`📋 Found ${mainWorkspaceBoards.length} boards in Main workspace via alternative method`);
+                            console.log(`   Board names: ${mainWorkspaceBoards.map(b => b.name).join(', ')}`);
+                        }
+                    } catch (alternativeError) {
+                        console.log('⚠️ Alternative method for Main workspace also failed:', alternativeError.message);
+                    }
+                }
             }
         }
         
         console.log('📊 Total boards found:', allBoards.length);
+        console.log('📝 All board names:', allBoards.map(b => b.name));
         
         res.json({
             success: true,
             boards: allBoards,
             count: allBoards.length,
             workspaces: workspacesResult.workspaces?.map(w => w.name) || [],
-            note: 'Retrieved boards from accessible workspaces'
+            note: 'Retrieved boards from accessible workspaces, including Main workspace'
         });
     } catch (error) {
         console.error('❌ Boards API error:', error);
