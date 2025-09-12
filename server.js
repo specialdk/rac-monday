@@ -43,7 +43,7 @@ app.get("/", (req, res) => {
   res.send(`<!DOCTYPE html>
 <html>
 <head>
-    <title>Monday.com MCP v2.1 - Fixed</title>
+    <title>Monday.com MCP v2.2 - Fixed</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
         .container { background: white; padding: 20px; border-radius: 8px; }
