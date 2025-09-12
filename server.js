@@ -1,5 +1,5 @@
-// Monday.com API MCP Connection - Complete Setup with User Filtering and Gantt Chart
-// File: server.js
+// Monday.com API MCP Connection - Fixed Version with Gantt Chart
+// File: server-fixed.js
 
 const express = require("express");
 const fetch = require("node-fetch");
@@ -90,13 +90,13 @@ async function testMondayConnection() {
   }
 }
 
-// Homepage with Monday.com interface
+// Homepage with Monday.com interface (same as server5 but with Gantt additions)
 app.get("/", (req, res) => {
   res.send(`
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Monday.com API MCP Connection v6</title>
+    <title>Monday.com API MCP Connection</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
@@ -179,6 +179,14 @@ app.get("/", (req, res) => {
             font-weight: bold;
             color: #1f2937;
         }
+        .clickable-project {
+            cursor: pointer;
+            transition: color 0.2s ease;
+        }
+        .clickable-project:hover {
+            color: #FF5722;
+            text-decoration: underline;
+        }
         .board-stats {
             display: flex;
             gap: 15px;
@@ -190,26 +198,6 @@ app.get("/", (req, res) => {
             border-radius: 4px;
             font-size: 12px;
         }
-        .item-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid #f3f4f6;
-        }
-        .item-row:last-child {
-            border-bottom: none;
-        }
-        .status-label {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        .status-working { background: #dbeafe; color: #1e40af; }
-        .status-done { background: #dcfce7; color: #166534; }
-        .status-stuck { background: #fef2f2; color: #dc2626; }
         .tab-button {
             background: #f3f4f6;
             color: #4a5568;
@@ -260,23 +248,6 @@ app.get("/", (req, res) => {
             border-radius: 6px;
             padding: 10px;
             margin: 8px 0;
-        }
-        .subitem-name {
-            font-weight: bold;
-            color: #4a5568;
-            margin-bottom: 5px;
-        }
-        .subitem-stats {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 8px;
-        }
-        .subitem-items {
-            font-size: 12px;
-            color: #6b7280;
-        }
-        .subitem-row {
-            padding: 2px 0;
         }
         /* User filter styles */
         .filter-section {
@@ -439,39 +410,6 @@ app.get("/", (req, res) => {
             padding: 8px 0;
         }
 
-        .gantt-bar {
-            height: 24px;
-            border-radius: 4px;
-            position: absolute;
-            display: flex;
-            align-items: center;
-            padding: 0 8px;
-            font-size: 11px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            transition: transform 0.2s ease;
-            min-width: 20px;
-        }
-
-        .gantt-bar:hover {
-            transform: scale(1.05);
-            z-index: 100;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-        }
-
-        .gantt-bar.status-planned { background: #3b82f6; }
-        .gantt-bar.status-active { background: #10b981; }
-        .gantt-bar.status-completed { background: #64748b; }
-        .gantt-bar.status-delayed { background: #ef4444; }
-        .gantt-bar.status-no-dates { 
-            background: #f59e0b; 
-            position: relative;
-            left: 10px;
-            width: 200px;
-        }
-
         .gantt-no-dates {
             color: #f59e0b;
             font-style: italic;
@@ -502,28 +440,6 @@ app.get("/", (req, res) => {
             height: 16px;
             border-radius: 3px;
         }
-
-        .date-input {
-            padding: 4px 8px;
-            border: 1px solid #d1d5db;
-            border-radius: 4px;
-            font-size: 12px;
-            width: 100px;
-        }
-
-        .edit-dates-btn {
-            background: #8b5cf6;
-            color: white;
-            border: none;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 11px;
-        }
-
-        .edit-dates-btn:hover {
-            background: #7c3aed;
-        }
     </style>
 </head>
 <body>
@@ -551,7 +467,7 @@ app.get("/", (req, res) => {
 
         <!-- Authentication Test -->
         <div class="section">
-            <h3>🔐 Step 1: Test Connection</h3>
+            <h3>🔍 Step 1: Test Connection</h3>
             <p>Test your Monday.com API connection and get account info:</p>
             <button onclick="testConnection()">🚀 Test Monday.com Connection</button>
             <div id="connectionResult"></div>
@@ -596,50 +512,9 @@ app.get("/", (req, res) => {
                         <button id="hideGanttBtn" class="gantt-btn" onclick="hideGanttChart()" style="display: none;">
                             📋 Hide Gantt Chart
                         </button>
-                        <button id="uploadDatesBtn" class="gantt-btn" onclick="showDateUploadModal()" disabled style="background: #8b5cf6;">
-                            📅 Upload Sample Dates
-                        </button>
                         <span id="ganttStatus" class="filter-status"></span>
                     </div>
                     <div id="ganttContainer"></div>
-                </div>
-
-                <!-- Date Upload Modal -->
-                <div id="dateUploadModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 30px; border-radius: 12px; max-width: 600px; width: 90%;">
-                        <h3>📅 Upload Timeline Dates to Monday.com</h3>
-                        <p>This will add sample timeline dates to your projects so you can see the Gantt chart in action!</p>
-                        
-                        <div style="margin: 20px 0;">
-                            <label><strong>Date Range for Sample Data:</strong></label><br>
-                            <input type="date" id="sampleStartDate" style="margin: 5px; padding: 8px;" /> to 
-                            <input type="date" id="sampleEndDate" style="margin: 5px; padding: 8px;" />
-                        </div>
-                        
-                        <div style="margin: 20px 0;">
-                            <label><strong>Timeline Column Name:</strong></label><br>
-                            <input type="text" id="timelineColumnName" value="Project Timeline" style="width: 100%; padding: 8px; margin: 5px 0;" />
-                        </div>
-                        
-                        <div style="background: #f0f9ff; padding: 15px; border-radius: 6px; margin: 15px 0; font-size: 14px;">
-                            <strong>📋 What this will do:</strong><br>
-                            • Create timeline columns on boards (if they don't exist)<br>
-                            • Add sample date ranges to your filtered projects<br>
-                            • Allow you to see actual timeline bars in the Gantt chart<br>
-                            • Distribute projects across the date range you specify
-                        </div>
-                        
-                        <div style="margin: 20px 0;">
-                            <button onclick="uploadSampleDates()" style="background: #10b981; color: white; padding: 12px 20px; border: none; border-radius: 6px; margin-right: 10px;">
-                                🚀 Upload Sample Dates
-                            </button>
-                            <button onclick="closeDateUploadModal()" style="background: #6b7280; color: white; padding: 12px 20px; border: none; border-radius: 6px;">
-                                Cancel
-                            </button>
-                        </div>
-                        
-                        <div id="uploadProgress" style="margin-top: 20px;"></div>
-                    </div>
                 </div>
 
                 <div class="button-grid">
@@ -884,7 +759,6 @@ query {
                 
                 // Enable Gantt chart and show section
                 document.getElementById('showGanttBtn').disabled = false;
-                document.getElementById('uploadDatesBtn').disabled = false;
                 document.getElementById('ganttSection').style.display = 'block';
                 document.getElementById('ganttStatus').textContent = 
                     'Ready to show timeline for ' + filteredNestedBoards.length + ' main boards';
@@ -947,7 +821,7 @@ query {
             }
         }
 
-        // Enhanced displayBoards with user filtering
+        // Enhanced displayBoards with user filtering (same as server5)
         function displayBoards(boards) {
             console.log('Displaying boards with user filter...');
             
@@ -1004,14 +878,14 @@ query {
                 html += '<div class="stat">📁 ' + groupCount + ' groups</div>';
                 html += '<div class="stat">🆔 ' + board.id + '</div>';
                 if (hasSubitems) {
-                    html += '<div class="stat">📎 ' + board.subitems.length + ' subitems</div>';
+                    html += '<div class="stat">🔎 ' + board.subitems.length + ' subitems</div>';
                 }
                 html += '</div>';
                 
                 // Add subitems container
                 if (hasSubitems) {
                     html += '<div class="subitems-container" id="subitems-' + board.id + '">';
-                    html += '<h5>📎 Subitems:</h5>';
+                    html += '<h5>🔎 Subitems:</h5>';
                     
                     board.subitems.forEach(function(subitem) {
                         const subItemCount = subitem.items_page && subitem.items_page.items ? subitem.items_page.items.length : 0;
@@ -1072,30 +946,41 @@ query {
             document.getElementById('ganttStatus').textContent = 'Gantt chart hidden';
         }
 
-        // Enhanced Gantt chart renderer with date detection
+        // Enhanced Gantt chart renderer with real date detection
         function renderSimpleGanttChart(projects) {
-            console.log('Rendering Gantt chart for', projects.length, 'main boards');
+            console.log('Rendering Gantt chart for', projects.length, 'main boards with date detection');
             
             let html = '<div class="gantt-container">';
             
-            // Header
+            // Create timeline reference (6 months from now)
+            const now = new Date();
+            const timelineStart = new Date(now.getFullYear(), now.getMonth(), 1); // Start of current month
+            const timelineEnd = new Date(now.getFullYear(), now.getMonth() + 6, 0); // End of 6 months from now
+            
+            // Header with actual months
             html += '<div class="gantt-header">';
             html += '<div class="gantt-header-left">Project Details</div>';
             html += '<div class="gantt-header-right">';
-            html += '<div class="gantt-month">Jan 2025</div>';
-            html += '<div class="gantt-month">Feb 2025</div>';
-            html += '<div class="gantt-month">Mar 2025</div>';
-            html += '<div class="gantt-month">Apr 2025</div>';
-            html += '<div class="gantt-month">May 2025</div>';
-            html += '<div class="gantt-month">Jun 2025</div>';
+            
+            for (let i = 0; i < 6; i++) {
+                const monthDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
+                const monthName = monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                html += '<div class="gantt-month">' + monthName + '</div>';
+            }
+            
             html += '</div></div>';
             
-            // Project rows
+            // Project rows with date detection
+            let projectsWithDates = 0;
+            let totalDateColumns = 0;
+            
             projects.forEach(project => {
                 const itemCount = project.items_page && project.items_page.items ? project.items_page.items.length : 0;
                 
-                // Try to find date information
+                // Detect date information
                 const dateInfo = findProjectDates(project);
+                if (dateInfo.hasDateColumns) projectsWithDates++;
+                totalDateColumns += dateInfo.dateColumns.length;
                 
                 html += '<div class="gantt-row">';
                 html += '<div class="gantt-project">';
@@ -1106,22 +991,47 @@ query {
                     html += ' | Workspace: ' + project.workspace.name;
                 }
                 if (dateInfo.hasDateColumns) {
-                    html += ' | 📅 ' + dateInfo.dateColumns.length + ' date columns found';
+                    html += ' | 📅 ' + dateInfo.dateColumns.length + ' date columns';
                 }
                 html += '</div>';
                 html += '</div>';
                 
                 html += '<div class="gantt-timeline">';
                 
-                if (dateInfo.hasDateColumns && dateInfo.startDate && dateInfo.endDate) {
-                    // Show actual timeline bar
-                    html += '<div class="gantt-bar status-active" style="left: 50px; width: 150px;" title="' + dateInfo.startDate + ' to ' + dateInfo.endDate + '">';
-                    html += '📅 ' + dateInfo.startDate + ' → ' + dateInfo.endDate;
-                    html += '</div>';
+                if (dateInfo.hasDateColumns && (dateInfo.startDate || dateInfo.endDate)) {
+                    // Calculate timeline bar position
+                    let barHtml = '';
+                    let barStyle = '';
+                    let barText = '';
+                    
+                    if (dateInfo.startDate && dateInfo.endDate) {
+                        // Both start and end dates - full timeline bar
+                        const startPercent = calculateTimelinePosition(dateInfo.startDate, timelineStart, timelineEnd);
+                        const endPercent = calculateTimelinePosition(dateInfo.endDate, timelineStart, timelineEnd);
+                        const width = Math.max(2, endPercent - startPercent); // Minimum 2% width
+                        
+                        barStyle = 'left: ' + startPercent + '%; width: ' + width + '%;';
+                        barText = formatDateRange(dateInfo.startDate, dateInfo.endDate);
+                        barHtml = '<div class="gantt-bar status-active" style="' + barStyle + '" title="' + barText + '">' + barText + '</div>';
+                    } else if (dateInfo.startDate) {
+                        // Only start date - milestone
+                        const startPercent = calculateTimelinePosition(dateInfo.startDate, timelineStart, timelineEnd);
+                        barStyle = 'left: ' + startPercent + '%; width: 3%;';
+                        barText = '📅 ' + formatDate(dateInfo.startDate);
+                        barHtml = '<div class="gantt-bar status-planned" style="' + barStyle + '" title="Start: ' + formatDate(dateInfo.startDate) + '">' + barText + '</div>';
+                    } else if (dateInfo.endDate) {
+                        // Only end date - deadline
+                        const endPercent = calculateTimelinePosition(dateInfo.endDate, timelineStart, timelineEnd);
+                        barStyle = 'left: ' + endPercent + '%; width: 3%;';
+                        barText = '🎯 ' + formatDate(dateInfo.endDate);
+                        barHtml = '<div class="gantt-bar status-delayed" style="' + barStyle + '" title="Due: ' + formatDate(dateInfo.endDate) + '">' + barText + '</div>';
+                    }
+                    
+                    html += barHtml;
                 } else if (dateInfo.hasDateColumns) {
-                    html += '<div class="gantt-no-dates">📅 Date columns available: ' + dateInfo.dateColumns.join(', ') + '</div>';
+                    html += '<div class="gantt-no-dates">📅 Date columns available: ' + dateInfo.dateColumns.join(', ') + ' - add dates to see timeline</div>';
                 } else {
-                    html += '<div class="gantt-no-dates">📅 Timeline coming soon - add date columns to see timeline</div>';
+                    html += '<div class="gantt-no-dates">📅 Add date or timeline columns to see project timeline</div>';
                 }
                 
                 html += '</div>';
@@ -1130,48 +1040,44 @@ query {
             
             html += '</div>';
             
-            // Enhanced legend with date information
-            let projectsWithDates = 0;
-            let totalDateColumns = 0;
-            projects.forEach(project => {
-                const dateInfo = findProjectDates(project);
-                if (dateInfo.hasDateColumns) projectsWithDates++;
-                totalDateColumns += dateInfo.dateColumns.length;
-            });
-            
+            // Enhanced legend with date statistics
             html += '<div class="gantt-legend">';
             html += '<div class="gantt-legend-item">';
             html += '<div class="gantt-legend-color" style="background: #10b981;"></div>';
-            html += 'Projects with dates (' + projectsWithDates + ')';
-            html += '</div>';
-            html += '<div class="gantt-legend-item">';
-            html += '<div class="gantt-legend-color" style="background: #f59e0b;"></div>';
-            html += 'Projects without dates (' + (projects.length - projectsWithDates) + ')';
+            html += 'Projects with timeline (' + projectsWithDates + ')';
             html += '</div>';
             html += '<div class="gantt-legend-item">';
             html += '<div class="gantt-legend-color" style="background: #3b82f6;"></div>';
-            html += 'Total date columns found: ' + totalDateColumns;
+            html += 'Start dates (milestones)';
+            html += '</div>';
+            html += '<div class="gantt-legend-item">';
+            html += '<div class="gantt-legend-color" style="background: #ef4444;"></div>';
+            html += 'Due dates (deadlines)';
+            html += '</div>';
+            html += '<div class="gantt-legend-item">';
+            html += '<div class="gantt-legend-color" style="background: #f59e0b;"></div>';
+            html += 'Need dates (' + (projects.length - projectsWithDates) + ')';
             html += '</div>';
             html += '</div>';
             
-            // Add helpful information about date column types
-            html += '<div style="margin-top: 15px; padding: 10px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; font-size: 12px;">';
-            html += '<strong>📋 Date Column Types Monday.com Supports:</strong><br>';
-            html += '• <strong>date</strong> - Single date picker<br>';
-            html += '• <strong>timeline</strong> - Start and end date range<br>';
-            html += '• <strong>creation_log</strong> - Item creation date<br>';
-            html += '• <strong>last_updated</strong> - Last modification date<br><br>';
-            html += '<strong>💡 To see timeline bars:</strong> Add date or timeline columns to your Monday.com boards with actual dates.';
+            // Add helpful instructions
+            html += '<div style="margin-top: 15px; padding: 15px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; font-size: 13px;">';
+            html += '<strong>📋 How to add dates to your Monday.com projects:</strong><br>';
+            html += '• <strong>Timeline Column:</strong> Go to your board → Add Column → Timeline → Set start & end dates<br>';
+            html += '• <strong>Date Column:</strong> Go to your board → Add Column → Date → Pick single dates<br>';
+            html += '• <strong>Supported types:</strong> "timeline" (best), "date", "creation_log", "last_updated"<br>';
+            html += '• Projects with dates will show as colored bars on this timeline<br>';
+            html += '• Timeline covers: <strong>' + formatDate(timelineStart) + ' to ' + formatDate(timelineEnd) + '</strong>';
             html += '</div>';
             
             document.getElementById('ganttContainer').innerHTML = html;
             document.getElementById('showGanttBtn').style.display = 'none';
             document.getElementById('hideGanttBtn').style.display = 'inline-block';
             document.getElementById('ganttStatus').textContent = 
-                'Timeline: ' + projects.length + ' main boards (' + projectsWithDates + ' with dates, ' + totalDateColumns + ' date columns)';
+                'Timeline: ' + projects.length + ' projects (' + projectsWithDates + ' with dates, ' + totalDateColumns + ' date columns)';
         }
 
-        // Helper function to find date information in a project
+        // Enhanced function to find date information in a project
         function findProjectDates(project) {
             const dateInfo = {
                 hasDateColumns: false,
@@ -1190,130 +1096,81 @@ query {
                 });
             }
             
-            // For simplified data structure, we'll fetch detailed data if needed
-            // This version focuses on showing column availability rather than parsing existing dates
+            // Check items for actual date values
+            if (project.items_page && project.items_page.items) {
+                project.items_page.items.forEach(item => {
+                    if (item.column_values) {
+                        item.column_values.forEach(columnValue => {
+                            if (['date', 'timeline', 'creation_log', 'last_updated'].includes(columnValue.type)) {
+                                // Parse different date formats
+                                if (columnValue.type === 'timeline' && columnValue.value) {
+                                    // Timeline column has JSON format: {"from":"2025-01-15","to":"2025-02-28"}
+                                    try {
+                                        const timelineData = JSON.parse(columnValue.value);
+                                        if (timelineData.from && !dateInfo.startDate) {
+                                            dateInfo.startDate = new Date(timelineData.from);
+                                        }
+                                        if (timelineData.to && !dateInfo.endDate) {
+                                            dateInfo.endDate = new Date(timelineData.to);
+                                        }
+                                    } catch (e) {
+                                        console.warn('Failed to parse timeline data:', columnValue.value);
+                                    }
+                                } else if (columnValue.type === 'date' && columnValue.value) {
+                                    // Date column has JSON format: {"date":"2025-01-15"}
+                                    try {
+                                        const dateData = JSON.parse(columnValue.value);
+                                        if (dateData.date && !dateInfo.startDate) {
+                                            dateInfo.startDate = new Date(dateData.date);
+                                        }
+                                    } catch (e) {
+                                        console.warn('Failed to parse date data:', columnValue.value);
+                                    }
+                                } else if (columnValue.text && (columnValue.type === 'creation_log' || columnValue.type === 'last_updated')) {
+                                    // Creation/update logs have text dates
+                                    try {
+                                        const date = new Date(columnValue.text);
+                                        if (!isNaN(date.getTime()) && !dateInfo.startDate) {
+                                            dateInfo.startDate = date;
+                                        }
+                                    } catch (e) {
+                                        console.warn('Failed to parse log date:', columnValue.text);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+            }
             
+            console.log('Date info for', project.name, ':', dateInfo);
             return dateInfo;
         }
 
-        // Enhanced function to fetch detailed board data for date analysis
-        async function fetchBoardDetails(boardId) {
-            try {
-                const response = await fetch('/api/board-details/' + boardId);
-                const data = await response.json();
-                return data.success ? data.board : null;
-            } catch (error) {
-                console.error('Error fetching board details:', error);
-                return null;
+        // Calculate timeline bar position as percentage
+        function calculateTimelinePosition(date, timelineStart, timelineEnd) {
+            const totalTimelineMs = timelineEnd.getTime() - timelineStart.getTime();
+            const dateMs = date.getTime() - timelineStart.getTime();
+            const percentage = Math.max(0, Math.min(100, (dateMs / totalTimelineMs) * 100));
+            return percentage;
+        }
+
+        // Format date for display
+        function formatDate(date) {
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        // Format date range for display
+        function formatDateRange(startDate, endDate) {
+            const start = formatDate(startDate);
+            const end = formatDate(endDate);
+            if (start === end) {
+                return start;
             }
+            return start + ' → ' + end;
         }
 
-        // DATE UPLOAD FUNCTIONS
-        
-        // Show date upload modal
-        function showDateUploadModal() {
-            // Set default dates (next 3 months)
-            const today = new Date();
-            const startDate = new Date(today);
-            startDate.setDate(startDate.getDate() + 7); // Start next week
-            const endDate = new Date(today);
-            endDate.setMonth(endDate.getMonth() + 3); // End in 3 months
-            
-            document.getElementById('sampleStartDate').value = startDate.toISOString().split('T')[0];
-            document.getElementById('sampleEndDate').value = endDate.toISOString().split('T')[0];
-            
-            document.getElementById('dateUploadModal').style.display = 'block';
-        }
-
-        // Close date upload modal
-        function closeDateUploadModal() {
-            document.getElementById('dateUploadModal').style.display = 'none';
-            document.getElementById('uploadProgress').innerHTML = '';
-        }
-
-        // Upload sample dates to Monday.com
-        function uploadSampleDates() {
-            const startDateStr = document.getElementById('sampleStartDate').value;
-            const endDateStr = document.getElementById('sampleEndDate').value;
-            const columnName = document.getElementById('timelineColumnName').value;
-            
-            if (!startDateStr || !endDateStr) {
-                alert('Please select both start and end dates');
-                return;
-            }
-            
-            if (currentFilteredBoards.length === 0) {
-                alert('No projects selected. Please filter projects first.');
-                return;
-            }
-            
-            document.getElementById('uploadProgress').innerHTML = 
-                '<div class="status pending">🔄 Uploading sample dates to ' + currentFilteredBoards.length + ' projects...</div>';
-            
-            // Generate sample date ranges for each project
-            const projectDates = generateProjectDateRanges(currentFilteredBoards, startDateStr, endDateStr);
-            
-            // Upload to Monday.com
-            fetch('/api/upload-bulk-timeline-dates', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectDates })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('uploadProgress').innerHTML = 
-                        '<div class="status connected">✅ Success! Uploaded dates to ' + data.uploaded + ' projects' + 
-                        (data.failed > 0 ? ', ' + data.failed + ' failed' : '') + '</div>' +
-                        '<p>You can now close this modal and view the Gantt chart to see timeline bars!</p>';
-                } else {
-                    document.getElementById('uploadProgress').innerHTML = 
-                        '<div class="status disconnected">❌ Error: ' + data.error + '</div>';
-                }
-            })
-            .catch(error => {
-                document.getElementById('uploadProgress').innerHTML = 
-                    '<div class="status disconnected">❌ Network Error: ' + error.message + '</div>';
-            });
-        }
-
-        // Generate sample date ranges for projects
-        function generateProjectDateRanges(projects, startDateStr, endDateStr) {
-            const startDate = new Date(startDateStr);
-            const endDate = new Date(endDateStr);
-            const totalDays = Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24));
-            const projectDates = [];
-            
-            projects.forEach((project, index) => {
-                // Distribute projects across the date range
-                const projectStartOffset = Math.floor((totalDays / projects.length) * index);
-                const projectDuration = Math.max(7, Math.floor(totalDays / projects.length)); // Min 1 week
-                
-                const projectStartDate = new Date(startDate);
-                projectStartDate.setDate(projectStartDate.getDate() + projectStartOffset);
-                
-                const projectEndDate = new Date(projectStartDate);
-                projectEndDate.setDate(projectEndDate.getDate() + projectDuration);
-                
-                // Get first item from the project for upload
-                if (project.items_page && project.items_page.items && project.items_page.items.length > 0) {
-                    const firstItem = project.items_page.items[0];
-                    
-                    projectDates.push({
-                        boardId: project.id,
-                        itemId: firstItem.id,
-                        startDate: projectStartDate.toISOString().split('T')[0],
-                        endDate: projectEndDate.toISOString().split('T')[0],
-                        columnId: "timeline" // Default timeline column
-                    });
-                }
-            });
-            
-            console.log('Generated', projectDates.length, 'project date ranges');
-            return projectDates;
-        }
-
-        // Rest of the existing functions remain the same...
+        // Rest of the existing functions (same as server5)
         
         // Get board details
         function getBoardDetails() {
@@ -1586,9 +1443,6 @@ query {
     `);
 });
 
-// All the backend endpoints remain exactly the same as in server2.js...
-// [Rest of the backend code is identical to server2.js]
-
 // Test connection endpoint
 app.post("/test-connection", async (req, res) => {
   try {
@@ -1628,63 +1482,10 @@ app.get("/connection-status", (req, res) => {
   });
 });
 
-// Get detailed board data with column values for Gantt date detection
-app.get("/api/board-details/:id", async (req, res) => {
-  try {
-    const boardId = req.params.id;
-
-    console.log("🔍 Fetching detailed data for board:", boardId);
-
-    const query = `
-            query($boardId: ID!) {
-                boards(ids: [$boardId]) {
-                    id
-                    name
-                    columns {
-                        id
-                        title
-                        type
-                        settings_str
-                    }
-                    items_page(limit: 10) {
-                        items {
-                            id
-                            name
-                            state
-                            column_values {
-                                id
-                                title
-                                type
-                                text
-                                value
-                            }
-                        }
-                    }
-                }
-            }
-        `;
-
-    const result = await makeMondayRequest(query, { boardId });
-
-    console.log("📊 Successfully fetched detailed data for board:", boardId);
-
-    res.json({
-      success: true,
-      board: result.boards?.[0] || null,
-    });
-  } catch (error) {
-    console.error("❌ Board details API error:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-// Get all boards with enhanced data for user filtering and date columns
+// Get all boards with enhanced data for user filtering (fixed GraphQL query)
 app.get("/api/boards", async (req, res) => {
   try {
-    // Simplified query that's less likely to cause 500 errors
+    // Simplified query that avoids the "title" field error
     const query = `
             query {
                 boards(limit: 100) {
@@ -1728,14 +1529,10 @@ app.get("/api/boards", async (req, res) => {
             }
         `;
 
-    console.log("🔍 Fetching boards with simplified query...");
+    console.log("🔍 Fetching boards with fixed query...");
     const result = await makeMondayRequest(query);
 
-    console.log(
-      "📊 Successfully fetched",
-      result.boards?.length || 0,
-      "boards"
-    );
+    console.log("📊 Successfully fetched", result.boards?.length || 0, "boards");
 
     res.json({
       success: true,
@@ -1747,12 +1544,11 @@ app.get("/api/boards", async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
-      details:
-        "Failed to fetch boards - this might be due to API limits or query complexity",
     });
   }
 });
 
+// All other endpoints remain the same as server5.js
 // Get specific board details
 app.get("/api/board/:id", async (req, res) => {
   try {
@@ -2324,200 +2120,39 @@ app.post("/api/custom-query", async (req, res) => {
   }
 });
 
-// Add date upload endpoint for Gantt timeline population
-app.post("/api/upload-timeline-dates", async (req, res) => {
-  try {
-    const { boardId, itemId, startDate, endDate, columnId } = req.body;
-
-    // Upload timeline dates to Monday.com
-    const mutation = `
-            mutation($boardId: ID!, $itemId: ID!, $columnValues: JSON!) {
-                change_multiple_column_values(
-                    board_id: $boardId,
-                    item_id: $itemId,
-                    column_values: $columnValues
-                ) {
-                    id
-                    name
-                    column_values {
-                        id
-                        title
-                        text
-                        type
-                    }
-                }
-            }
-        `;
-
-    // Format timeline data
-    const timelineData = {
-      [columnId || "timeline"]: {
-        from: startDate, // Format: "2025-08-15"
-        to: endDate, // Format: "2025-09-15"
-      },
-    };
-
-    const variables = {
-      boardId: boardId,
-      itemId: itemId,
-      columnValues: JSON.stringify(timelineData),
-    };
-
-    const result = await makeMondayRequest(mutation, variables);
-
-    res.json({
-      success: true,
-      item: result.change_multiple_column_values,
-      uploaded: timelineData,
-      message: `Timeline dates uploaded: ${startDate} to ${endDate}`,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-// Bulk date upload for multiple projects
-app.post("/api/upload-bulk-timeline-dates", async (req, res) => {
-  try {
-    const { projectDates } = req.body; // Array of {boardId, itemId, startDate, endDate, columnId?}
-    const results = [];
-    const errors = [];
-
-    for (const project of projectDates) {
-      try {
-        const mutation = `
-                    mutation($boardId: ID!, $itemId: ID!, $columnValues: JSON!) {
-                        change_multiple_column_values(
-                            board_id: $boardId,
-                            item_id: $itemId,
-                            column_values: $columnValues
-                        ) {
-                            id
-                            name
-                        }
-                    }
-                `;
-
-        const timelineData = {
-          [project.columnId || "timeline"]: {
-            from: project.startDate,
-            to: project.endDate,
-          },
-        };
-
-        const variables = {
-          boardId: project.boardId,
-          itemId: project.itemId,
-          columnValues: JSON.stringify(timelineData),
-        };
-
-        const result = await makeMondayRequest(mutation, variables);
-        results.push({
-          success: true,
-          item: result.change_multiple_column_values,
-          dates: timelineData,
-        });
-
-        // Small delay to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      } catch (error) {
-        errors.push({
-          project: project,
-          error: error.message,
-        });
-      }
-    }
-
-    res.json({
-      success: true,
-      uploaded: results.length,
-      failed: errors.length,
-      results: results,
-      errors: errors,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-
-// Create timeline column on a board
-app.post("/api/create-timeline-column", async (req, res) => {
-  try {
-    const { boardId, columnTitle, columnDescription } = req.body;
-
-    const mutation = `
-            mutation($boardId: ID!, $columnType: ColumnType!, $title: String!, $description: String) {
-                create_column(
-                    board_id: $boardId,
-                    column_type: $columnType,
-                    title: $title,
-                    description: $description
-                ) {
-                    id
-                    title
-                    type
-                    description
-                }
-            }
-        `;
-
-    const variables = {
-      boardId: boardId,
-      columnType: "timeline",
-      title: columnTitle || "Project Timeline",
-      description: columnDescription || "Project start and end dates",
-    };
-
-    const result = await makeMondayRequest(mutation, variables);
-
-    res.json({
-      success: true,
-      column: result.create_column,
-      message: `Timeline column '${columnTitle}' created successfully`,
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
-  }
-});
-res.json({
-  timestamp: new Date().toISOString(),
-  config: {
-    apiUrl: MONDAY_CONFIG.apiUrl,
-    apiVersion: MONDAY_CONFIG.apiVersion,
-    hasToken: !!MONDAY_CONFIG.apiToken,
-    rateLimit: MONDAY_CONFIG.rateLimit,
-  },
-  cache: {
-    boardsCount: mondayCache.boards.length,
-    usersCount: mondayCache.users.length,
-    teamsCount: mondayCache.teams.length,
-    lastUpdated: mondayCache.lastUpdated,
-  },
-  endpoints: [
-    "GET /api/boards",
-    "GET /api/board/:id",
-    "POST /api/create-board",
-    "GET /api/items",
-    "POST /api/create-item",
-    "POST /api/update-item",
-    "GET /api/users",
-    "GET /api/teams",
-    "GET /api/activity",
-    "GET /api/updates",
-    "POST /api/create-update",
-    "GET /api/stats",
-    "GET /api/logs",
-    "POST /api/custom-query",
-  ],
+// Debug endpoint - PROPERLY WRAPPED IN FUNCTION
+app.get("/api/debug", (req, res) => {
+  res.json({
+    timestamp: new Date().toISOString(),
+    config: {
+      apiUrl: MONDAY_CONFIG.apiUrl,
+      apiVersion: MONDAY_CONFIG.apiVersion,
+      hasToken: !!MONDAY_CONFIG.apiToken,
+      rateLimit: MONDAY_CONFIG.rateLimit,
+    },
+    cache: {
+      boardsCount: mondayCache.boards.length,
+      usersCount: mondayCache.users.length,
+      teamsCount: mondayCache.teams.length,
+      lastUpdated: mondayCache.lastUpdated,
+    },
+    endpoints: [
+      "GET /api/boards",
+      "GET /api/board/:id",
+      "POST /api/create-board",
+      "GET /api/items",
+      "POST /api/create-item",
+      "POST /api/update-item",
+      "GET /api/users",
+      "GET /api/teams",
+      "GET /api/activity",
+      "GET /api/updates",
+      "POST /api/create-update",
+      "GET /api/stats",
+      "GET /api/logs",
+      "POST /api/custom-query",
+    ],
+  });
 });
 
 // Health check
@@ -2537,7 +2172,7 @@ app.listen(port, () => {
   console.log(`🎯 Ready for Monday.com integration!`);
 
   if (!MONDAY_CONFIG.apiToken) {
-    console.warn("⚠️  Please set MONDAY_API_TOKEN environment variable");
+    console.warn("⚠️ Please set MONDAY_API_TOKEN environment variable");
     console.warn(
       "📋 Get your token from: https://monday.com → Profile → Developer → My Access Tokens"
     );
