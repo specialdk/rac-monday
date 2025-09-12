@@ -1,4 +1,4 @@
-// Monday.com API MCP Connection - Fixed Version with Gantt Chart
+// Monday.com API MCP Connection - Fixed Version (6) with Gantt Chart
 // File: server-fixed.js
 
 const express = require("express");
