@@ -1,5 +1,5 @@
-// Monday.com API MCP Connection - Fixed Version with Gantt Chart
-// File: server-fixed.js
+// Monday.com API MCP Connection v8.0 - Enhanced Navigation & Gantt Chart
+// File: server8.js
 
 const express = require("express");
 const fetch = require("node-fetch");
@@ -90,13 +90,13 @@ async function testMondayConnection() {
   }
 }
 
-// Homepage with Monday.com interface (same as server5 but with Gantt additions)
+// Homepage with Monday.com interface - Enhanced Navigation
 app.get("/", (req, res) => {
   res.send(`
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Monday.com API MCP Connection</title>
+    <title>Monday.com API MCP Connection v8.0 - Enhanced Navigation</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
@@ -219,6 +219,37 @@ app.get("/", (req, res) => {
         }
         .tab-content.active {
             display: block;
+        }
+        /* Enhanced Navigation Styles */
+        .navigation-breadcrumb {
+            background: #e0f2fe;
+            border: 2px solid #0ea5e9;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            display: none;
+        }
+        .breadcrumb-item {
+            display: inline-block;
+            margin-right: 10px;
+            padding: 5px 10px;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #0ea5e9;
+            font-weight: bold;
+        }
+        .breadcrumb-item:hover {
+            background: #f0f9ff;
+        }
+        .breadcrumb-item.current {
+            background: #0ea5e9;
+            color: white;
+            cursor: default;
+        }
+        .breadcrumb-separator {
+            margin: 0 5px;
+            color: #64748b;
         }
         /* Toggle functionality styles */
         .toggle-btn {
@@ -410,6 +441,35 @@ app.get("/", (req, res) => {
             padding: 8px 0;
         }
 
+        .gantt-bar {
+            position: absolute;
+            height: 24px;
+            border-radius: 4px;
+            color: white;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            min-width: 2%;
+            z-index: 5;
+        }
+
+        .gantt-bar.status-active {
+            background: linear-gradient(45deg, #10b981, #059669);
+            border: 1px solid #047857;
+        }
+
+        .gantt-bar.status-planned {
+            background: linear-gradient(45deg, #3b82f6, #2563eb);
+            border: 1px solid #1d4ed8;
+        }
+
+        .gantt-bar.status-delayed {
+            background: linear-gradient(45deg, #ef4444, #dc2626);
+            border: 1px solid #b91c1c;
+        }
+
         .gantt-no-dates {
             color: #f59e0b;
             font-style: italic;
@@ -440,11 +500,76 @@ app.get("/", (req, res) => {
             height: 16px;
             border-radius: 3px;
         }
+
+        /* Single project drill-down styles */
+        .project-detail-section {
+            background: #f0fdf4;
+            border: 2px solid #22c55e;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .project-detail-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .back-btn {
+            background: #6b7280;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            margin-right: 15px;
+        }
+
+        .back-btn:hover {
+            background: #4b5563;
+        }
+
+        .project-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+
+        .project-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .meta-card {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+        }
+
+        .meta-label {
+            font-size: 12px;
+            color: #6b7280;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .meta-value {
+            font-size: 16px;
+            color: #1f2937;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📋 Monday.com API MCP Connection</h1>
+        <h1>📋 Monday.com API MCP Connection v8.0</h1>
         
         <!-- Connection Status -->
         <div class="section">
@@ -471,6 +596,13 @@ app.get("/", (req, res) => {
             <p>Test your Monday.com API connection and get account info:</p>
             <button onclick="testConnection()">🚀 Test Monday.com Connection</button>
             <div id="connectionResult"></div>
+        </div>
+
+        <!-- Enhanced Navigation Breadcrumb -->
+        <div class="navigation-breadcrumb" id="navigationBreadcrumb">
+            <div class="breadcrumb-item current" id="breadcrumbAll" onclick="navigateToAll()">
+                👥 All Users
+            </div>
         </div>
 
         <!-- Main Data Tabs -->
@@ -502,6 +634,22 @@ app.get("/", (req, res) => {
                     </div>
                 </div>
 
+                <!-- Single Project Detail Section -->
+                <div class="project-detail-section" id="projectDetailSection">
+                    <div class="project-detail-header">
+                        <button class="back-btn" onclick="navigateBack()">← Back</button>
+                        <div class="project-title" id="projectTitle">Project Details</div>
+                    </div>
+                    
+                    <div class="project-meta" id="projectMeta">
+                        <!-- Project metadata will be populated here -->
+                    </div>
+                    
+                    <div id="singleProjectGantt">
+                        <!-- Single project Gantt chart will be rendered here -->
+                    </div>
+                </div>
+
                 <!-- Gantt Chart Section -->
                 <div class="gantt-section" id="ganttSection">
                     <div class="gantt-controls">
@@ -525,7 +673,7 @@ app.get("/", (req, res) => {
                 <div id="boardsResult"></div>
             </div>
 
-            <!-- Items Tab -->
+            <!-- Other tabs remain the same... -->
             <div id="items-tab" class="tab-content">
                 <div class="button-grid">
                     <button onclick="getItems()" disabled id="btn-items">📝 Get All Items</button>
@@ -535,7 +683,6 @@ app.get("/", (req, res) => {
                 <div id="itemsResult"></div>
             </div>
 
-            <!-- Users Tab -->
             <div id="users-tab" class="tab-content">
                 <div class="button-grid">
                     <button onclick="getUsers()" disabled id="btn-users">👥 Get Users</button>
@@ -545,7 +692,6 @@ app.get("/", (req, res) => {
                 <div id="usersResult"></div>
             </div>
 
-            <!-- Updates Tab -->
             <div id="updates-tab" class="tab-content">
                 <div class="button-grid">
                     <button onclick="getUpdates()" disabled id="btn-updates">💬 Get Recent Updates</button>
@@ -554,7 +700,6 @@ app.get("/", (req, res) => {
                 <div id="updatesResult"></div>
             </div>
 
-            <!-- Analytics Tab -->
             <div id="analytics-tab" class="tab-content">
                 <div class="button-grid">
                     <button onclick="getWorkspaceStats()" disabled id="btn-stats">📈 Workspace Stats</button>
@@ -601,7 +746,17 @@ query {
         let allBoards = [];
         let allUsers = [];
         let currentFilter = 'ALL';
-        let currentFilteredBoards = []; // For Gantt chart
+        let currentFilteredBoards = [];
+        
+        // Enhanced navigation state
+        let navigationState = {
+            level: 'all', // 'all', 'user', 'project'
+            userId: null,
+            userLabel: null,
+            projectId: null,
+            projectName: null,
+            projectData: null
+        };
 
         // Test connection to Monday.com
         function testConnection() {
@@ -635,10 +790,18 @@ query {
                 });
         }
 
-        // Enhanced getBoards function that also loads users
+        // Enhanced getBoards function with navigation
         function getBoards() {
+            console.log('🔍 Loading boards and users...');
             showLoading('boardsResult');
             document.getElementById('filterStatus').textContent = 'Loading projects and users...';
+            
+            // Reset navigation to all users level
+            navigationState.level = 'all';
+            navigationState.userId = null;
+            navigationState.userLabel = null;
+            updateBreadcrumb();
+            hideProjectDetail();
             
             // Load both boards and users
             Promise.all([
@@ -650,102 +813,399 @@ query {
                     allBoards = boardsData.boards;
                     allUsers = usersData.users;
                     
-                    // Create nested structure to get main boards count
                     const nestedBoards = createNestedBoardStructure(allBoards);
                     const mainBoardCount = nestedBoards.length;
                     
                     populateUserFilter();
                     displayBoards(allBoards);
                     
-                    // Initialize filtered boards for Gantt (use nested structure)
                     currentFilteredBoards = nestedBoards;
                     
                     document.getElementById('filterStatus').textContent = 
                         'Showing ' + mainBoardCount + ' main boards (All users)';
+                        
+                    console.log('✅ Loaded', allBoards.length, 'total boards,', mainBoardCount, 'main boards');
                 } else {
                     document.getElementById('boardsResult').innerHTML = 
                         '<div class="status disconnected">❌ Error loading data</div>';
                 }
             })
             .catch(error => {
+                console.error('❌ Error loading boards:', error);
                 document.getElementById('boardsResult').innerHTML = 
                     '<div class="status disconnected">❌ Network Error: ' + error.message + '</div>';
             });
         }
 
-        // Populate the user filter dropdown
-        function populateUserFilter() {
+        // Enhanced navigation functions
+        function updateBreadcrumb() {
+            const breadcrumb = document.getElementById('navigationBreadcrumb');
+            const allItem = document.getElementById('breadcrumbAll');
+            
+            // Clear existing breadcrumb items except "All Users"
+            const existingItems = breadcrumb.querySelectorAll('.breadcrumb-item:not(#breadcrumbAll), .breadcrumb-separator');
+            existingItems.forEach(item => item.remove());
+            
+            if (navigationState.level === 'all') {
+                allItem.className = 'breadcrumb-item current';
+                breadcrumb.style.display = 'none';
+            } else {
+                allItem.className = 'breadcrumb-item';
+                breadcrumb.style.display = 'block';
+                
+                if (navigationState.level === 'user' && navigationState.userLabel) {
+                    const separator = document.createElement('span');
+                    separator.className = 'breadcrumb-separator';
+                    separator.textContent = '→';
+                    breadcrumb.appendChild(separator);
+                    
+                    const userItem = document.createElement('div');
+                    userItem.className = 'breadcrumb-item current';
+                    userItem.textContent = navigationState.userLabel;
+                    breadcrumb.appendChild(userItem);
+                }
+                
+                if (navigationState.level === 'project' && navigationState.projectName) {
+                    if (navigationState.userLabel) {
+                        const userItem = breadcrumb.querySelector('.breadcrumb-item.current');
+                        if (userItem) {
+                            userItem.className = 'breadcrumb-item';
+                            userItem.onclick = () => navigateToUser();
+                        }
+                    }
+                    
+                    const separator = document.createElement('span');
+                    separator.className = 'breadcrumb-separator';
+                    separator.textContent = '→';
+                    breadcrumb.appendChild(separator);
+                    
+                    const projectItem = document.createElement('div');
+                    projectItem.className = 'breadcrumb-item current';
+                    projectItem.textContent = '📋 ' + navigationState.projectName;
+                    breadcrumb.appendChild(projectItem);
+                }
+            }
+        }
+
+        function navigateToAll() {
+            console.log('🔄 Navigating to All Users view');
+            navigationState.level = 'all';
+            navigationState.userId = null;
+            navigationState.userLabel = null;
+            navigationState.projectId = null;
+            navigationState.projectName = null;
+            
+            // Reset user filter
             const userSelect = document.getElementById('userFilter');
-            userSelect.innerHTML = '';
+            if (userSelect.options.length > 0) {
+                userSelect.selectedIndex = 0; // Select "ALL USERS"
+            }
             
-            // Create nested structure to get main boards count for all users
-            const allNestedBoards = createNestedBoardStructure(allBoards);
+            updateBreadcrumb();
+            hideProjectDetail();
+            getBoards(); // Reload all boards
+        }
+
+        function navigateToUser() {
+            console.log('🔄 Navigating back to User view');
+            if (navigationState.userId) {
+                navigationState.level = 'user';
+                navigationState.projectId = null;
+                navigationState.projectName = null;
+                
+                updateBreadcrumb();
+                hideProjectDetail();
+                applyUserFilter(); // Reapply the user filter
+            }
+        }
+
+        function navigateBack() {
+            if (navigationState.level === 'project') {
+                if (navigationState.userId) {
+                    navigateToUser();
+                } else {
+                    navigateToAll();
+                }
+            } else if (navigationState.level === 'user') {
+                navigateToAll();
+            }
+        }
+
+        // Enhanced project drill-down function
+        function drillDownToProject(boardId, boardName) {
+            console.log('🔍 Drilling down to project:', boardName, 'ID:', boardId);
             
-            // Add "ALL" option
-            const allOption = document.createElement('option');
-            allOption.value = 'ALL';
-            allOption.textContent = '👥 ALL USERS (' + allNestedBoards.length + ' main boards)';
-            userSelect.appendChild(allOption);
+            // Update navigation state
+            navigationState.level = 'project';
+            navigationState.projectId = boardId;
+            navigationState.projectName = boardName;
             
-            // Add individual users
-            allUsers.forEach(user => {
-                if (user.enabled) { // Only show active users
-                    const userBoards = filterBoardsByUser(allBoards, user.id);
-                    const userNestedBoards = createNestedBoardStructure(userBoards);
-                    if (userNestedBoards.length > 0) { // Only show users who have main boards
-                        const option = document.createElement('option');
-                        option.value = user.id;
-                        option.textContent = '👤 ' + user.name + ' (' + userNestedBoards.length + ' main boards)';
-                        userSelect.appendChild(option);
+            showLoading('projectDetailSection');
+            document.getElementById('projectDetailSection').style.display = 'block';
+            document.getElementById('ganttSection').style.display = 'none';
+            document.getElementById('boardsResult').style.display = 'none';
+            
+            updateBreadcrumb();
+            
+            // Fetch detailed project information
+            fetch('/api/board/' + boardId)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('📊 Project details received:', data);
+                    
+                    if (data.success && data.board) {
+                        navigationState.projectData = data.board;
+                        displaySingleProjectDetails(data.board);
+                    } else {
+                        document.getElementById('projectDetailSection').innerHTML = 
+                            '<div class="status disconnected">❌ Error loading project details: ' + (data.error || 'Unknown error') + '</div>';
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ Error loading project details:', error);
+                    document.getElementById('projectDetailSection').innerHTML = 
+                        '<div class="status disconnected">❌ Network Error: ' + error.message + '</div>';
+                });
+        }
+
+        // Display single project details with Gantt
+        function displaySingleProjectDetails(project) {
+            console.log('📋 Displaying single project details for:', project.name);
+            
+            document.getElementById('projectTitle').textContent = project.name;
+            
+            // Build project metadata
+            const itemCount = project.groups ? project.groups.reduce((sum, group) => sum + (group.items ? group.items.length : 0), 0) : 0;
+            const groupCount = project.groups ? project.groups.length : 0;
+            const columnCount = project.columns ? project.columns.length : 0;
+            const ownerCount = project.owners ? project.owners.length : 0;
+            
+            let metaHtml = '';
+            
+            // Basic info cards
+            metaHtml += '<div class="meta-card"><div class="meta-label">Description</div><div class="meta-value">' + (project.description || 'No description') + '</div></div>';
+            metaHtml += '<div class="meta-card"><div class="meta-label">Type</div><div class="meta-value">' + project.board_kind + '</div></div>';
+            metaHtml += '<div class="meta-card"><div class="meta-label">Items</div><div class="meta-value">' + itemCount + '</div></div>';
+            metaHtml += '<div class="meta-card"><div class="meta-label">Groups</div><div class="meta-value">' + groupCount + '</div></div>';
+            metaHtml += '<div class="meta-card"><div class="meta-label">Columns</div><div class="meta-value">' + columnCount + '</div></div>';
+            metaHtml += '<div class="meta-card"><div class="meta-label">Team Size</div><div class="meta-value">' + ownerCount + '</div></div>';
+            
+            // Date columns info
+            const dateColumns = project.columns ? project.columns.filter(col => ['date', 'timeline', 'creation_log', 'last_updated'].includes(col.type)) : [];
+            metaHtml += '<div class="meta-card"><div class="meta-label">Date Columns</div><div class="meta-value">' + dateColumns.length + '</div></div>';
+            
+            document.getElementById('projectMeta').innerHTML = metaHtml;
+            
+            // Render single project Gantt
+            renderSingleProjectGantt(project);
+        }
+
+        // Render Gantt chart for a single project
+        function renderSingleProjectGantt(project) {
+            console.log('📈 Rendering single project Gantt for:', project.name);
+            
+            let html = '<h4>📊 Project Timeline - ' + project.name + '</h4>';
+            
+            if (!project.groups || project.groups.length === 0) {
+                html += '<div class="gantt-no-dates">📋 No groups/items found in this project</div>';
+                document.getElementById('singleProjectGantt').innerHTML = html;
+                return;
+            }
+            
+            // Create timeline reference (3 months back, 6 months forward)
+            const now = new Date();
+            const timelineStart = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+            const timelineEnd = new Date(now.getFullYear(), now.getMonth() + 6, 0);
+            
+            html += '<div class="gantt-container">';
+            
+            // Header
+            html += '<div class="gantt-header">';
+            html += '<div class="gantt-header-left">Task Details</div>';
+            html += '<div class="gantt-header-right">';
+            
+            for (let i = -3; i < 6; i++) {
+                const monthDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
+                const monthName = monthDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+                html += '<div class="gantt-month">' + monthName + '</div>';
+            }
+            
+            html += '</div></div>';
+            
+            // Process each group and its items
+            let itemsWithDates = 0;
+            let totalItems = 0;
+            
+            project.groups.forEach(group => {
+                if (!group.items || group.items.length === 0) return;
+                
+                // Group header
+                html += '<div class="gantt-row" style="background: #f1f5f9; font-weight: bold;">';
+                html += '<div class="gantt-project">';
+                html += '<div class="gantt-project-name">📁 ' + group.title + '</div>';
+                html += '<div class="gantt-project-info">' + group.items.length + ' items in this group</div>';
+                html += '</div>';
+                html += '<div class="gantt-timeline"></div>';
+                html += '</div>';
+                
+                // Group items
+                group.items.forEach(item => {
+                    totalItems++;
+                    const itemDateInfo = findItemDates(item);
+                    if (itemDateInfo.hasDateColumns && (itemDateInfo.startDate || itemDateInfo.endDate)) {
+                        itemsWithDates++;
+                    }
+                    
+                    html += '<div class="gantt-row">';
+                    html += '<div class="gantt-project" style="padding-left: 25px;">';
+                    html += '<div class="gantt-project-name">📋 ' + item.name + '</div>';
+                    html += '<div class="gantt-project-info">';
+                    html += 'Status: ' + (item.state || 'unknown');
+                    if (itemDateInfo.dateColumns.length > 0) {
+                        html += ' | 📅 ' + itemDateInfo.dateColumns.length + ' date fields';
+                    }
+                    html += '</div>';
+                    html += '</div>';
+                    
+                    html += '<div class="gantt-timeline">';
+                    
+                    if (itemDateInfo.hasDateColumns && (itemDateInfo.startDate || itemDateInfo.endDate)) {
+                        // Render timeline bar
+                        let barHtml = '';
+                        
+                        if (itemDateInfo.startDate && itemDateInfo.endDate) {
+                            const startPercent = calculateTimelinePosition(itemDateInfo.startDate, timelineStart, timelineEnd);
+                            const endPercent = calculateTimelinePosition(itemDateInfo.endDate, timelineStart, timelineEnd);
+                            const width = Math.max(2, endPercent - startPercent);
+                            
+                            barHtml = '<div class="gantt-bar status-active" style="left: ' + startPercent + '%; width: ' + width + '%;" title="' + formatDateRange(itemDateInfo.startDate, itemDateInfo.endDate) + '">' + 
+                                     formatDateRange(itemDateInfo.startDate, itemDateInfo.endDate) + '</div>';
+                        } else if (itemDateInfo.startDate) {
+                            const startPercent = calculateTimelinePosition(itemDateInfo.startDate, timelineStart, timelineEnd);
+                            barHtml = '<div class="gantt-bar status-planned" style="left: ' + startPercent + '%; width: 3%;" title="Start: ' + formatDate(itemDateInfo.startDate) + '">📅 ' + formatDate(itemDateInfo.startDate) + '</div>';
+                        } else if (itemDateInfo.endDate) {
+                            const endPercent = calculateTimelinePosition(itemDateInfo.endDate, timelineStart, timelineEnd);
+                            barHtml = '<div class="gantt-bar status-delayed" style="left: ' + endPercent + '%; width: 3%;" title="Due: ' + formatDate(itemDateInfo.endDate) + '">🎯 ' + formatDate(itemDateInfo.endDate) + '</div>';
+                        }
+                        
+                        html += barHtml;
+                    } else {
+                        html += '<div class="gantt-no-dates">📅 Add timeline or date columns to see schedule</div>';
+                    }
+                    
+                    html += '</div>';
+                    html += '</div>';
+                });
+            });
+            
+            html += '</div>'; // Close gantt-container
+            
+            // Summary and legend
+            html += '<div class="gantt-legend">';
+            html += '<div class="gantt-legend-item"><div class="gantt-legend-color" style="background: #10b981;"></div>Active timeline (' + itemsWithDates + ')</div>';
+            html += '<div class="gantt-legend-item"><div class="gantt-legend-color" style="background: #3b82f6;"></div>Start dates</div>';
+            html += '<div class="gantt-legend-item"><div class="gantt-legend-color" style="background: #ef4444;"></div>Due dates</div>';
+            html += '<div class="gantt-legend-item"><div class="gantt-legend-color" style="background: #f59e0b;"></div>Need dates (' + (totalItems - itemsWithDates) + ')</div>';
+            html += '</div>';
+            
+            html += '<div style="margin-top: 15px; padding: 15px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; font-size: 13px;">';
+            html += '<strong>📋 Single Project Timeline Analysis:</strong><br>';
+            html += '• <strong>Total Items:</strong> ' + totalItems + '<br>';
+            html += '• <strong>Items with Dates:</strong> ' + itemsWithDates + ' (' + Math.round((itemsWithDates / totalItems) * 100) + '%)<br>';
+            html += '• <strong>Timeline Period:</strong> ' + formatDate(timelineStart) + ' to ' + formatDate(timelineEnd) + '<br>';
+            html += '• <strong>Groups:</strong> ' + project.groups.length + ' sections';
+            html += '</div>';
+            
+            document.getElementById('singleProjectGantt').innerHTML = html;
+        }
+
+        // Enhanced function to find dates in individual items
+        function findItemDates(item) {
+            const dateInfo = {
+                hasDateColumns: false,
+                dateColumns: [],
+                startDate: null,
+                endDate: null
+            };
+            
+            if (!item.column_values) return dateInfo;
+            
+            item.column_values.forEach(columnValue => {
+                if (['date', 'timeline', 'creation_log', 'last_updated'].includes(columnValue.type)) {
+                    dateInfo.hasDateColumns = true;
+                    dateInfo.dateColumns.push(columnValue.title + ' (' + columnValue.type + ')');
+                    
+                    // Parse different date formats
+                    if (columnValue.type === 'timeline' && columnValue.value) {
+                        try {
+                            const timelineData = JSON.parse(columnValue.value);
+                            if (timelineData.from && !dateInfo.startDate) {
+                                dateInfo.startDate = new Date(timelineData.from);
+                            }
+                            if (timelineData.to && !dateInfo.endDate) {
+                                dateInfo.endDate = new Date(timelineData.to);
+                            }
+                        } catch (e) {
+                            console.warn('Failed to parse timeline data:', columnValue.value);
+                        }
+                    } else if (columnValue.type === 'date' && columnValue.value) {
+                        try {
+                            const dateData = JSON.parse(columnValue.value);
+                            if (dateData.date && !dateInfo.startDate) {
+                                dateInfo.startDate = new Date(dateData.date);
+                            }
+                        } catch (e) {
+                            console.warn('Failed to parse date data:', columnValue.value);
+                        }
+                    } else if (columnValue.text && (columnValue.type === 'creation_log' || columnValue.type === 'last_updated')) {
+                        try {
+                            const date = new Date(columnValue.text);
+                            if (!isNaN(date.getTime()) && !dateInfo.startDate) {
+                                dateInfo.startDate = date;
+                            }
+                        } catch (e) {
+                            console.warn('Failed to parse log date:', columnValue.text);
+                        }
                     }
                 }
             });
             
-            // Enable the controls
-            userSelect.disabled = false;
-            document.getElementById('openFilterBtn').disabled = false;
-            
-            console.log('User filter populated with', allUsers.length, 'users');
+            return dateInfo;
         }
 
-        // Filter boards by user (owner or subscriber)
-        function filterBoardsByUser(boards, userId) {
-            if (userId === 'ALL') {
-                return boards;
-            }
-            
-            return boards.filter(board => {
-                // Check if user is owner
-                const isOwner = board.owners && board.owners.some(owner => owner.id === userId);
-                
-                // Check if user is subscriber  
-                const isSubscriber = board.subscribers && board.subscribers.some(sub => sub.id === userId);
-                
-                return isOwner || isSubscriber;
-            });
+        function hideProjectDetail() {
+            document.getElementById('projectDetailSection').style.display = 'none';
+            document.getElementById('ganttSection').style.display = 'block';
+            document.getElementById('boardsResult').style.display = 'block';
         }
 
-        // Apply the selected user filter
+        // Enhanced user filter application
         function applyUserFilter() {
             const userSelect = document.getElementById('userFilter');
             const selectedUserId = userSelect.value;
             const selectedUserName = userSelect.options[userSelect.selectedIndex].textContent;
             
-            console.log('Applying filter for user:', selectedUserId, selectedUserName);
+            console.log('🔍 Applying user filter:', selectedUserId, selectedUserName);
+            
+            // Update navigation state
+            navigationState.level = selectedUserId === 'ALL' ? 'all' : 'user';
+            navigationState.userId = selectedUserId === 'ALL' ? null : selectedUserId;
+            navigationState.userLabel = selectedUserId === 'ALL' ? null : selectedUserName;
+            navigationState.projectId = null;
+            navigationState.projectName = null;
             
             showLoading('boardsResult');
             document.getElementById('filterStatus').textContent = 'Filtering projects...';
+            hideProjectDetail();
+            updateBreadcrumb();
             
-            // Filter boards
             const filteredBoards = filterBoardsByUser(allBoards, selectedUserId);
             const filteredNestedBoards = createNestedBoardStructure(filteredBoards);
-            currentFilteredBoards = filteredNestedBoards; // Store MAIN boards for Gantt chart
+            currentFilteredBoards = filteredNestedBoards;
             
-            // Update display
             setTimeout(() => {
                 displayBoards(filteredBoards);
                 
-                // Update status with main board count
                 if (selectedUserId === 'ALL') {
                     document.getElementById('filterStatus').textContent = 
                         'Showing ' + filteredNestedBoards.length + ' main boards (All users)';
@@ -757,7 +1217,6 @@ query {
                 
                 currentFilter = selectedUserId;
                 
-                // Enable Gantt chart and show section
                 document.getElementById('showGanttBtn').disabled = false;
                 document.getElementById('ganttSection').style.display = 'block';
                 document.getElementById('ganttStatus').textContent = 
@@ -765,7 +1224,51 @@ query {
             }, 200);
         }
 
-        // Helper function to create nested structure
+        // All other existing functions remain the same...
+        // (populateUserFilter, filterBoardsByUser, createNestedBoardStructure, etc.)
+        
+        function populateUserFilter() {
+            const userSelect = document.getElementById('userFilter');
+            userSelect.innerHTML = '';
+            
+            const allNestedBoards = createNestedBoardStructure(allBoards);
+            
+            const allOption = document.createElement('option');
+            allOption.value = 'ALL';
+            allOption.textContent = '👥 ALL USERS (' + allNestedBoards.length + ' main boards)';
+            userSelect.appendChild(allOption);
+            
+            allUsers.forEach(user => {
+                if (user.enabled) {
+                    const userBoards = filterBoardsByUser(allBoards, user.id);
+                    const userNestedBoards = createNestedBoardStructure(userBoards);
+                    if (userNestedBoards.length > 0) {
+                        const option = document.createElement('option');
+                        option.value = user.id;
+                        option.textContent = '👤 ' + user.name + ' (' + userNestedBoards.length + ' main boards)';
+                        userSelect.appendChild(option);
+                    }
+                }
+            });
+            
+            userSelect.disabled = false;
+            document.getElementById('openFilterBtn').disabled = false;
+            
+            console.log('User filter populated with', allUsers.length, 'users');
+        }
+
+        function filterBoardsByUser(boards, userId) {
+            if (userId === 'ALL') {
+                return boards;
+            }
+            
+            return boards.filter(board => {
+                const isOwner = board.owners && board.owners.some(owner => owner.id === userId);
+                const isSubscriber = board.subscribers && board.subscribers.some(sub => sub.id === userId);
+                return isOwner || isSubscriber;
+            });
+        }
+
         function createNestedBoardStructure(boards) {
             const mainBoards = [];
             const subitemBoards = [];
@@ -805,7 +1308,6 @@ query {
             });
         }
 
-        // Toggle function
         function toggleSubitems(boardId) {
             const subitemsContainer = document.getElementById('subitems-' + boardId);
             const toggleBtn = document.getElementById('toggle-' + boardId);
@@ -821,9 +1323,9 @@ query {
             }
         }
 
-        // Enhanced displayBoards with user filtering (same as server5)
+        // Enhanced displayBoards with clickable project names for drill-down
         function displayBoards(boards) {
-            console.log('Displaying boards with user filter...');
+            console.log('Displaying boards with enhanced navigation...');
             
             const nestedBoards = createNestedBoardStructure(boards);
             console.log('Processing', nestedBoards.length, 'main boards');
@@ -845,7 +1347,6 @@ query {
                 html += '<div class="board-card">';
                 html += '<div class="board-header">';
                 
-                // Add toggle button
                 if (hasSubitems) {
                     html += '<button class="toggle-btn" data-board-id="' + board.id + '" id="toggle-' + board.id + '">';
                     html += '▶️ </button>';
@@ -853,13 +1354,13 @@ query {
                     html += '<span style="width: 25px; display: inline-block;"></span>';
                 }
                 
-                html += '<div class="board-name">📋 ' + board.name + '</div>';
+                // Make project name clickable for drill-down
+                html += '<div class="board-name clickable-project" onclick="drillDownToProject(\'' + board.id + '\', \'' + board.name.replace(/'/g, "\\'") + '\')">📋 ' + board.name + '</div>';
                 html += '</div>';
                 
                 html += '<p><strong>Description:</strong> ' + (board.description || 'No description') + '</p>';
                 html += '<p><strong>Type:</strong> ' + board.board_kind + ' | <strong>Workspace:</strong> ' + (board.workspace && board.workspace.name ? board.workspace.name : 'Unknown') + '</p>';
                 
-                // Add user information
                 html += '<p><strong>👥 Team:</strong> ';
                 if (board.owners && board.owners.length > 0) {
                     html += 'Owners: ' + board.owners.map(owner => owner.name).join(', ');
@@ -882,7 +1383,6 @@ query {
                 }
                 html += '</div>';
                 
-                // Add subitems container
                 if (hasSubitems) {
                     html += '<div class="subitems-container" id="subitems-' + board.id + '">';
                     html += '<h5>🔎 Subitems:</h5>';
@@ -905,7 +1405,6 @@ query {
             
             document.getElementById('boardsResult').innerHTML = html;
             
-            // Add event listeners for toggle buttons
             setTimeout(function() {
                 const toggleButtons = document.querySelectorAll('.toggle-btn');
                 console.log('Attaching event listeners to', toggleButtons.length, 'toggle buttons');
@@ -919,12 +1418,10 @@ query {
                 });
             }, 100);
             
-            console.log('Boards displayed with user filtering');
+            console.log('Boards displayed with enhanced navigation');
         }
 
-        // GANTT CHART FUNCTIONS
-        
-        // Show Gantt chart
+        // GANTT CHART FUNCTIONS (existing functions remain the same)
         function showGanttChart() {
             console.log('Showing Gantt chart for', currentFilteredBoards.length, 'projects');
             
@@ -938,7 +1435,6 @@ query {
             renderSimpleGanttChart(currentFilteredBoards);
         }
 
-        // Hide Gantt chart
         function hideGanttChart() {
             document.getElementById('ganttContainer').innerHTML = '';
             document.getElementById('showGanttBtn').style.display = 'inline-block';
@@ -946,18 +1442,15 @@ query {
             document.getElementById('ganttStatus').textContent = 'Gantt chart hidden';
         }
 
-        // Enhanced Gantt chart renderer with real date detection
         function renderSimpleGanttChart(projects) {
             console.log('Rendering Gantt chart for', projects.length, 'main boards with date detection');
             
             let html = '<div class="gantt-container">';
             
-            // Create timeline reference (6 months from now)
             const now = new Date();
-            const timelineStart = new Date(now.getFullYear(), now.getMonth(), 1); // Start of current month
-            const timelineEnd = new Date(now.getFullYear(), now.getMonth() + 6, 0); // End of 6 months from now
+            const timelineStart = new Date(now.getFullYear(), now.getMonth(), 1);
+            const timelineEnd = new Date(now.getFullYear(), now.getMonth() + 6, 0);
             
-            // Header with actual months
             html += '<div class="gantt-header">';
             html += '<div class="gantt-header-left">Project Details</div>';
             html += '<div class="gantt-header-right">';
@@ -970,21 +1463,20 @@ query {
             
             html += '</div></div>';
             
-            // Project rows with date detection
             let projectsWithDates = 0;
             let totalDateColumns = 0;
             
             projects.forEach(project => {
                 const itemCount = project.items_page && project.items_page.items ? project.items_page.items.length : 0;
                 
-                // Detect date information
                 const dateInfo = findProjectDates(project);
                 if (dateInfo.hasDateColumns) projectsWithDates++;
                 totalDateColumns += dateInfo.dateColumns.length;
                 
                 html += '<div class="gantt-row">';
                 html += '<div class="gantt-project">';
-                html += '<div class="gantt-project-name">📋 ' + project.name + '</div>';
+                // Make project name clickable in Gantt view too
+                html += '<div class="gantt-project-name" onclick="drillDownToProject(\'' + project.id + '\', \'' + project.name.replace(/'/g, "\\'") + '\')">📋 ' + project.name + '</div>';
                 html += '<div class="gantt-project-info">';
                 html += 'Type: ' + project.board_kind + ' | Items: ' + itemCount;
                 if (project.workspace && project.workspace.name) {
@@ -999,28 +1491,24 @@ query {
                 html += '<div class="gantt-timeline">';
                 
                 if (dateInfo.hasDateColumns && (dateInfo.startDate || dateInfo.endDate)) {
-                    // Calculate timeline bar position
                     let barHtml = '';
                     let barStyle = '';
                     let barText = '';
                     
                     if (dateInfo.startDate && dateInfo.endDate) {
-                        // Both start and end dates - full timeline bar
                         const startPercent = calculateTimelinePosition(dateInfo.startDate, timelineStart, timelineEnd);
                         const endPercent = calculateTimelinePosition(dateInfo.endDate, timelineStart, timelineEnd);
-                        const width = Math.max(2, endPercent - startPercent); // Minimum 2% width
+                        const width = Math.max(2, endPercent - startPercent);
                         
                         barStyle = 'left: ' + startPercent + '%; width: ' + width + '%;';
                         barText = formatDateRange(dateInfo.startDate, dateInfo.endDate);
                         barHtml = '<div class="gantt-bar status-active" style="' + barStyle + '" title="' + barText + '">' + barText + '</div>';
                     } else if (dateInfo.startDate) {
-                        // Only start date - milestone
                         const startPercent = calculateTimelinePosition(dateInfo.startDate, timelineStart, timelineEnd);
                         barStyle = 'left: ' + startPercent + '%; width: 3%;';
                         barText = '📅 ' + formatDate(dateInfo.startDate);
                         barHtml = '<div class="gantt-bar status-planned" style="' + barStyle + '" title="Start: ' + formatDate(dateInfo.startDate) + '">' + barText + '</div>';
                     } else if (dateInfo.endDate) {
-                        // Only end date - deadline
                         const endPercent = calculateTimelinePosition(dateInfo.endDate, timelineStart, timelineEnd);
                         barStyle = 'left: ' + endPercent + '%; width: 3%;';
                         barText = '🎯 ' + formatDate(dateInfo.endDate);
@@ -1040,7 +1528,6 @@ query {
             
             html += '</div>';
             
-            // Enhanced legend with date statistics
             html += '<div class="gantt-legend">';
             html += '<div class="gantt-legend-item">';
             html += '<div class="gantt-legend-color" style="background: #10b981;"></div>';
@@ -1060,7 +1547,6 @@ query {
             html += '</div>';
             html += '</div>';
             
-            // Add helpful instructions
             html += '<div style="margin-top: 15px; padding: 15px; background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 6px; font-size: 13px;">';
             html += '<strong>📋 How to add dates to your Monday.com projects:</strong><br>';
             html += '• <strong>Timeline Column:</strong> Go to your board → Add Column → Timeline → Set start & end dates<br>';
@@ -1077,7 +1563,6 @@ query {
                 'Timeline: ' + projects.length + ' projects (' + projectsWithDates + ' with dates, ' + totalDateColumns + ' date columns)';
         }
 
-        // Enhanced function to find date information in a project
         function findProjectDates(project) {
             const dateInfo = {
                 hasDateColumns: false,
@@ -1086,7 +1571,6 @@ query {
                 endDate: null
             };
             
-            // Check columns for date types
             if (project.columns) {
                 project.columns.forEach(column => {
                     if (['date', 'timeline', 'creation_log', 'last_updated'].includes(column.type)) {
@@ -1096,15 +1580,12 @@ query {
                 });
             }
             
-            // Check items for actual date values
             if (project.items_page && project.items_page.items) {
                 project.items_page.items.forEach(item => {
                     if (item.column_values) {
                         item.column_values.forEach(columnValue => {
                             if (['date', 'timeline', 'creation_log', 'last_updated'].includes(columnValue.type)) {
-                                // Parse different date formats
                                 if (columnValue.type === 'timeline' && columnValue.value) {
-                                    // Timeline column has JSON format: {"from":"2025-01-15","to":"2025-02-28"}
                                     try {
                                         const timelineData = JSON.parse(columnValue.value);
                                         if (timelineData.from && !dateInfo.startDate) {
@@ -1117,7 +1598,6 @@ query {
                                         console.warn('Failed to parse timeline data:', columnValue.value);
                                     }
                                 } else if (columnValue.type === 'date' && columnValue.value) {
-                                    // Date column has JSON format: {"date":"2025-01-15"}
                                     try {
                                         const dateData = JSON.parse(columnValue.value);
                                         if (dateData.date && !dateInfo.startDate) {
@@ -1127,7 +1607,6 @@ query {
                                         console.warn('Failed to parse date data:', columnValue.value);
                                     }
                                 } else if (columnValue.text && (columnValue.type === 'creation_log' || columnValue.type === 'last_updated')) {
-                                    // Creation/update logs have text dates
                                     try {
                                         const date = new Date(columnValue.text);
                                         if (!isNaN(date.getTime()) && !dateInfo.startDate) {
@@ -1147,7 +1626,6 @@ query {
             return dateInfo;
         }
 
-        // Calculate timeline bar position as percentage
         function calculateTimelinePosition(date, timelineStart, timelineEnd) {
             const totalTimelineMs = timelineEnd.getTime() - timelineStart.getTime();
             const dateMs = date.getTime() - timelineStart.getTime();
@@ -1155,12 +1633,10 @@ query {
             return percentage;
         }
 
-        // Format date for display
         function formatDate(date) {
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         }
 
-        // Format date range for display
         function formatDateRange(startDate, endDate) {
             const start = formatDate(startDate);
             const end = formatDate(endDate);
@@ -1170,9 +1646,7 @@ query {
             return start + ' → ' + end;
         }
 
-        // Rest of the existing functions (same as server5)
-        
-        // Get board details
+        // Rest of the existing functions from server5 (items, users, etc.)
         function getBoardDetails() {
             const boardId = prompt('Enter Board ID to get details:');
             if (!boardId) return;
@@ -1187,7 +1661,6 @@ query {
                 });
         }
 
-        // Create new board
         function createBoard() {
             const boardName = prompt('Enter name for new board:');
             if (!boardName) return;
@@ -1204,7 +1677,7 @@ query {
                     if (data.success) {
                         document.getElementById('boardsResult').innerHTML = 
                             '<div class="status connected">✅ Board created successfully! ID: ' + data.board.id + '</div>';
-                        getBoards(); // Refresh board list
+                        getBoards();
                     } else {
                         document.getElementById('boardsResult').innerHTML = 
                             '<div class="status disconnected">❌ Error: ' + (data.error || 'Failed to create board') + '</div>';
@@ -1212,7 +1685,6 @@ query {
                 });
         }
 
-        // Get all items
         function getItems() {
             showLoading('itemsResult');
             
@@ -1224,7 +1696,6 @@ query {
                 });
         }
 
-        // Create new item
         function createItem() {
             const boardId = prompt('Enter Board ID:');
             const itemName = prompt('Enter item name:');
@@ -1244,7 +1715,6 @@ query {
                 });
         }
 
-        // Update item
         function updateItem() {
             const itemId = prompt('Enter Item ID to update:');
             const newName = prompt('Enter new name:');
@@ -1264,7 +1734,6 @@ query {
                 });
         }
 
-        // Get users
         function getUsers() {
             showLoading('usersResult');
             
@@ -1276,7 +1745,6 @@ query {
                 });
         }
 
-        // Get teams
         function getTeams() {
             showLoading('usersResult');
             
@@ -1288,7 +1756,6 @@ query {
                 });
         }
 
-        // Get user activity
         function getUserActivity() {
             showLoading('usersResult');
             
@@ -1300,7 +1767,6 @@ query {
                 });
         }
 
-        // Get updates
         function getUpdates() {
             showLoading('updatesResult');
             
@@ -1312,7 +1778,6 @@ query {
                 });
         }
 
-        // Create update
         function createUpdate() {
             const itemId = prompt('Enter Item ID to update:');
             const updateText = prompt('Enter update text:');
@@ -1332,7 +1797,6 @@ query {
                 });
         }
 
-        // Get workspace stats
         function getWorkspaceStats() {
             showLoading('analyticsResult');
             
@@ -1344,7 +1808,6 @@ query {
                 });
         }
 
-        // Get activity logs
         function getActivityLogs() {
             showLoading('analyticsResult');
             
@@ -1356,7 +1819,6 @@ query {
                 });
         }
 
-        // Execute custom GraphQL query
         function executeCustomQuery() {
             const query = document.getElementById('customQuery').value;
             if (!query.trim()) {
@@ -1378,7 +1840,6 @@ query {
                 });
         }
 
-        // Show debug information
         function showDebugInfo() {
             fetch('/api/debug')
                 .then(response => response.json())
@@ -1388,9 +1849,7 @@ query {
                 });
         }
 
-        // Tab functionality
         function showTab(tabName) {
-            // Hide all tabs
             document.querySelectorAll('.tab-content').forEach(tab => {
                 tab.classList.remove('active');
             });
@@ -1398,12 +1857,10 @@ query {
                 btn.classList.remove('active');
             });
             
-            // Show selected tab
             document.getElementById(tabName + '-tab').classList.add('active');
             event.target.classList.add('active');
         }
 
-        // Helper functions
         function showLoading(elementId) {
             document.getElementById(elementId).innerHTML = 
                 '<div class="status pending">🔄 Loading...</div>';
@@ -1443,7 +1900,7 @@ query {
     `);
 });
 
-// Test connection endpoint
+// Backend endpoints start here
 app.post("/test-connection", async (req, res) => {
   try {
     console.log("🔍 Testing Monday.com connection...");
@@ -1482,10 +1939,9 @@ app.get("/connection-status", (req, res) => {
   });
 });
 
-// Get all boards with enhanced data for user filtering (fixed GraphQL query)
+// Enhanced boards endpoint with detailed column data for date analysis
 app.get("/api/boards", async (req, res) => {
   try {
-    // Simplified query that avoids the "title" field error
     const query = `
             query {
                 boards(limit: 100) {
@@ -1517,22 +1973,34 @@ app.get("/api/boards", async (req, res) => {
                         id
                         title
                         type
+                        settings_str
                     }
                     items_page(limit: 5) {
                         items {
                             id
                             name
                             state
+                            column_values {
+                                id
+                                title
+                                type
+                                text
+                                value
+                            }
                         }
                     }
                 }
             }
         `;
 
-    console.log("🔍 Fetching boards with fixed query...");
+    console.log("🔍 Fetching boards with enhanced column data...");
     const result = await makeMondayRequest(query);
 
-    console.log("📊 Successfully fetched", result.boards?.length || 0, "boards");
+    console.log(
+      "📊 Successfully fetched",
+      result.boards?.length || 0,
+      "boards with column data"
+    );
 
     res.json({
       success: true,
@@ -1540,7 +2008,7 @@ app.get("/api/boards", async (req, res) => {
       count: result.boards?.length || 0,
     });
   } catch (error) {
-    console.error("❌ Boards API error:", error);
+    console.error("❌ Enhanced boards API error:", error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -1548,11 +2016,12 @@ app.get("/api/boards", async (req, res) => {
   }
 });
 
-// All other endpoints remain the same as server5.js
-// Get specific board details
+// Enhanced single board endpoint with full item details and column values
 app.get("/api/board/:id", async (req, res) => {
   try {
     const boardId = req.params.id;
+
+    console.log("🔍 Fetching detailed board data for ID:", boardId);
 
     const query = `
             query($boardId: ID!) {
@@ -1563,6 +2032,10 @@ app.get("/api/board/:id", async (req, res) => {
                     state
                     board_kind
                     permissions
+                    workspace {
+                        id
+                        name
+                    }
                     groups {
                         id
                         title
@@ -1571,11 +2044,13 @@ app.get("/api/board/:id", async (req, res) => {
                             id
                             name
                             state
+                            created_at
+                            updated_at
                             column_values {
                                 id
-                                text
                                 title
                                 type
+                                text
                                 value
                             }
                         }
@@ -1602,19 +2077,34 @@ app.get("/api/board/:id", async (req, res) => {
 
     const result = await makeMondayRequest(query, { boardId });
 
+    if (!result.boards || result.boards.length === 0) {
+      return res.json({
+        success: false,
+        error: "Board not found or no access",
+        boardId: boardId,
+      });
+    }
+
+    console.log(
+      "✅ Successfully fetched detailed board:",
+      result.boards[0].name
+    );
+
     res.json({
       success: true,
-      board: result.boards?.[0] || null,
+      board: result.boards[0],
     });
   } catch (error) {
+    console.error("❌ Single board API error:", error);
     res.status(500).json({
       success: false,
       error: error.message,
+      boardId: req.params.id,
     });
   }
 });
 
-// Create new board
+// All remaining endpoints (create-board, items, users, teams, etc.)
 app.post("/api/create-board", async (req, res) => {
   try {
     const { name, description, boardKind } = req.body;
@@ -1653,7 +2143,6 @@ app.post("/api/create-board", async (req, res) => {
   }
 });
 
-// Get all items
 app.get("/api/items", async (req, res) => {
   try {
     const query = `
@@ -1703,7 +2192,6 @@ app.get("/api/items", async (req, res) => {
   }
 });
 
-// Create new item
 app.post("/api/create-item", async (req, res) => {
   try {
     const { boardId, itemName, groupId } = req.body;
@@ -1746,7 +2234,6 @@ app.post("/api/create-item", async (req, res) => {
   }
 });
 
-// Update item
 app.post("/api/update-item", async (req, res) => {
   try {
     const { itemId, name, columnValues } = req.body;
@@ -1804,7 +2291,6 @@ app.post("/api/update-item", async (req, res) => {
   }
 });
 
-// Get users
 app.get("/api/users", async (req, res) => {
   try {
     const query = `
@@ -1844,7 +2330,6 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
-// Get teams
 app.get("/api/teams", async (req, res) => {
   try {
     const query = `
@@ -1877,7 +2362,6 @@ app.get("/api/teams", async (req, res) => {
   }
 });
 
-// Get activity logs
 app.get("/api/activity", async (req, res) => {
   try {
     const query = `
@@ -1908,7 +2392,6 @@ app.get("/api/activity", async (req, res) => {
   }
 });
 
-// Get updates
 app.get("/api/updates", async (req, res) => {
   try {
     const query = `
@@ -1959,7 +2442,6 @@ app.get("/api/updates", async (req, res) => {
   }
 });
 
-// Create update
 app.post("/api/create-update", async (req, res) => {
   try {
     const { itemId, text } = req.body;
@@ -1996,7 +2478,6 @@ app.post("/api/create-update", async (req, res) => {
   }
 });
 
-// Get workspace statistics
 app.get("/api/stats", async (req, res) => {
   try {
     const query = `
@@ -2026,7 +2507,6 @@ app.get("/api/stats", async (req, res) => {
 
     const result = await makeMondayRequest(query);
 
-    // Calculate statistics
     const boards = result.boards || [];
     const users = result.users || [];
     const teams = result.teams || [];
@@ -2063,7 +2543,6 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
-// Get activity logs
 app.get("/api/logs", async (req, res) => {
   try {
     const query = `
@@ -2094,7 +2573,6 @@ app.get("/api/logs", async (req, res) => {
   }
 });
 
-// Execute custom GraphQL query
 app.post("/api/custom-query", async (req, res) => {
   try {
     const { query, variables } = req.body;
@@ -2120,10 +2598,10 @@ app.post("/api/custom-query", async (req, res) => {
   }
 });
 
-// Debug endpoint - PROPERLY WRAPPED IN FUNCTION
 app.get("/api/debug", (req, res) => {
   res.json({
     timestamp: new Date().toISOString(),
+    version: "8.0 - Enhanced Navigation & Gantt",
     config: {
       apiUrl: MONDAY_CONFIG.apiUrl,
       apiVersion: MONDAY_CONFIG.apiVersion,
@@ -2136,9 +2614,17 @@ app.get("/api/debug", (req, res) => {
       teamsCount: mondayCache.teams.length,
       lastUpdated: mondayCache.lastUpdated,
     },
+    features: [
+      "Enhanced navigation with breadcrumbs",
+      "Project drill-down functionality",
+      "Single project Gantt charts",
+      "Real date detection from Monday.com",
+      "Multi-level navigation (All → User → Project)",
+      "Timeline analysis with date parsing",
+    ],
     endpoints: [
-      "GET /api/boards",
-      "GET /api/board/:id",
+      "GET /api/boards - Enhanced with column data",
+      "GET /api/board/:id - Enhanced with full item details",
       "POST /api/create-board",
       "GET /api/items",
       "POST /api/create-item",
@@ -2155,21 +2641,25 @@ app.get("/api/debug", (req, res) => {
   });
 });
 
-// Health check
 app.get("/health", (req, res) => {
   res.json({
     status: "healthy",
     timestamp: new Date().toISOString(),
     hasApiToken: !!MONDAY_CONFIG.apiToken,
-    service: "Monday.com API MCP",
+    service: "Monday.com API MCP v8.0",
+    features: [
+      "Enhanced Navigation",
+      "Project Drill-down",
+      "Single Project Gantt",
+    ],
   });
 });
 
 app.listen(port, () => {
-  console.log(`📋 Monday.com API MCP running on port ${port}`);
+  console.log(`📋 Monday.com API MCP v8.0 running on port ${port}`);
   console.log(`📊 Dashboard: http://localhost:${port}`);
   console.log(`🔗 GraphQL API: ${MONDAY_CONFIG.apiUrl}`);
-  console.log(`🎯 Ready for Monday.com integration!`);
+  console.log(`🎯 Ready for Monday.com integration with enhanced navigation!`);
 
   if (!MONDAY_CONFIG.apiToken) {
     console.warn("⚠️ Please set MONDAY_API_TOKEN environment variable");
