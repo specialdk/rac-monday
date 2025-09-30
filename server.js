@@ -261,25 +261,8 @@ app.get("/", (req, res) => {
         <h1>📋 Monday.com API MCP Connection</h1>
         
         <!-- Connection Status -->
-        <div class="section">
-            <h3>🔗 Connection Status</h3>
-            <div id="connectionStatus" class="status disconnected">
-                ❌ Not Connected - Need to authenticate first
-            </div>
-            <p><strong>Monday.com Configuration:</strong></p>
-            <ul>
-                <li>API URL: ${MONDAY_CONFIG.apiUrl}</li>
-                <li>API Version: ${MONDAY_CONFIG.apiVersion}</li>
-                <li>Rate Limit: ${
-                  MONDAY_CONFIG.rateLimit.requests
-                } requests per minute</li>
-                <li>API Token: <span id="tokenStatus">${
-                  MONDAY_CONFIG.apiToken ? "Configured" : "Not set"
-                }</span></li>
-            </ul>
-        </div>
 
-         // Test connection to Monday.com
+        // Test connection to Monday.com
         function testConnection() {
     showLoading('connectionResult');
     
@@ -312,6 +295,26 @@ app.get("/", (req, res) => {
                 });
         }
                 
+        <div class="section">
+            <h3>🔗 Connection Status</h3>
+            <div id="connectionStatus" class="status disconnected">
+                ❌ Not Connected - Need to authenticate first
+            </div>
+            <p><strong>Monday.com Configuration:</strong></p>
+            <ul>
+                <li>API URL: ${MONDAY_CONFIG.apiUrl}</li>
+                <li>API Version: ${MONDAY_CONFIG.apiVersion}</li>
+                <li>Rate Limit: ${
+                  MONDAY_CONFIG.rateLimit.requests
+                } requests per minute</li>
+                <li>API Token: <span id="tokenStatus">${
+                  MONDAY_CONFIG.apiToken ? "Configured" : "Not set"
+                }</span></li>
+            </ul>
+        </div>
+
+         
+
         <div class="navigation-breadcrumb" id="navigationBreadcrumb">
             <div class="breadcrumb-item current" id="breadcrumbAll" onclick="navigateToAll()">
                 👥 All Users
