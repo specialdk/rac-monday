@@ -958,16 +958,34 @@ app.get("/api/boards", async (req, res) => {
                         name
                         email
                     }
+                    subscribers {
+                        id
+                        name
+                        email
+                    }
                     groups {
                         id
                         title
                         color
+                    }
+                    columns {
+                        id
+                        title
+                        type
+                        settings_str
                     }
                     items_page(limit: 10) {
                         items {
                             id
                             name
                             state
+                            column_values {
+                                id
+                                title
+                                type
+                                text
+                                value
+                            }
                         }
                     }
                 }
