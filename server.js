@@ -741,6 +741,9 @@ query {
     </div>
 
     <script>
+                
+    console.log('Script loaded successfully');
+    
         let isConnected = false;
         let currentUser = null;
         let allBoards = [];
