@@ -1355,7 +1355,7 @@ query {
                 }
                 
                 // Make project name clickable for drill-down
-                html += '<div class="board-name clickable-project" onclick="drillDownToProject(\'' + board.id + '\', \'' + board.name.replace(/'/g, "\\'") + '\')">📋 ' + board.name + '</div>';
+                html += '<div class="gantt-project-name" onclick="drillDownToProject(\'' + project.id + '\', \'' + project.name.replace(/'/g, "&#39;") + '\')">📋 ' + project.name + '</div>';
                 html += '</div>';
                 
                 html += '<p><strong>Description:</strong> ' + (board.description || 'No description') + '</p>';
@@ -1476,7 +1476,7 @@ query {
                 html += '<div class="gantt-row">';
                 html += '<div class="gantt-project">';
                 // Make project name clickable in Gantt view too
-                html += '<div class="gantt-project-name" onclick="drillDownToProject(\'' + project.id + '\', \'' + project.name.replace(/'/g, "\\'") + '\')">📋 ' + project.name + '</div>';
+                html += '<div class="board-name clickable-project" onclick="drillDownToProject(\'' + board.id + '\', \'' + board.name.replace(/'/g, "&#39;") + '\')">📋 ' + board.name + '</div>';
                 html += '<div class="gantt-project-info">';
                 html += 'Type: ' + project.board_kind + ' | Items: ' + itemCount;
                 if (project.workspace && project.workspace.name) {
