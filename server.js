@@ -518,6 +518,42 @@ query {
         // Get all boards
         function getBoards() {
     showLoading('boardsResult');
+
+    function createNestedBoardStructure(boards) {
+            const mainBoards = [];
+            const subitemBoards = [];
+            
+            boards.forEach(function(board) {
+                if (board.name.indexOf('Subitems of ') === 0) {
+                    subitemBoards.push(board);
+                } else {
+                    mainBoards.push(board);
+                }
+            });
+            
+            return mainBoards.map(function(mainBoard) {
+                const relatedSubitems = subitemBoards.filter(function(subBoard) {
+                    return subBoard.name === 'Subitems of ' + mainBoard.name;
+                });
+                
+                const mainItems = mainBoard.items && mainBoard.items.length ? mainBoard.items.length : 0;
+                const subItems = relatedSubitems.reduce(function(sum, sub) {
+                    return sum + (sub.items && sub.items.length ? sub.items.length : 0);
+                }, 0);
+                
+                return {
+                    id: mainBoard.id,
+                    name: mainBoard.name,
+                    description: mainBoard.description,
+                    board_kind: mainBoard.board_kind,
+                    groups: mainBoard.groups,
+                    items: mainBoard.items,
+                    hasSubitems: relatedSubitems.length > 0,
+                    subitems: relatedSubitems,
+                    totalItems: mainItems + subItems
+                };
+            });
+        }
     
     // Reset navigation to all users level
     navigationState.level = 'all';
