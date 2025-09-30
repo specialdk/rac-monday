@@ -397,7 +397,58 @@ query {
             projectName: null,
             projectData: null
         };
+      
+        // Enhanced navigation functions
+        function updateBreadcrumb() {
+            const breadcrumb = document.getElementById('navigationBreadcrumb');
+            const allItem = document.getElementById('breadcrumbAll');
+            
+            // Clear existing breadcrumb items except "All Users"
+            const existingItems = breadcrumb.querySelectorAll('.breadcrumb-item:not(#breadcrumbAll), .breadcrumb-separator');
+            existingItems.forEach(item => item.remove());
+            
+            if (navigationState.level === 'all') {
+                allItem.className = 'breadcrumb-item current';
+                breadcrumb.style.display = 'none';
+            } else {
+                allItem.className = 'breadcrumb-item';
+                breadcrumb.style.display = 'block';
+                
+                if (navigationState.level === 'user' && navigationState.userLabel) {
+                    const separator = document.createElement('span');
+                    separator.className = 'breadcrumb-separator';
+                    separator.textContent = '→';
+                    breadcrumb.appendChild(separator);
+                    
+                    const userItem = document.createElement('div');
+                    userItem.className = 'breadcrumb-item current';
+                    userItem.textContent = navigationState.userLabel;
+                    breadcrumb.appendChild(userItem);
+                }
+                
+                if (navigationState.level === 'project' && navigationState.projectName) {
+                    if (navigationState.userLabel) {
+                        const userItem = breadcrumb.querySelector('.breadcrumb-item.current');
+                        if (userItem) {
+                            userItem.className = 'breadcrumb-item';
+                            userItem.onclick = () => navigateToUser();
+                        }
+                    }
+                    
+                    const separator = document.createElement('span');
+                    separator.className = 'breadcrumb-separator';
+                    separator.textContent = '→';
+                    breadcrumb.appendChild(separator);
+                    
+                    const projectItem = document.createElement('div');
+                    projectItem.className = 'breadcrumb-item current';
+                    projectItem.textContent = '📋 ' + navigationState.projectName;
+                    breadcrumb.appendChild(projectItem);
+                }
+            }
+        }
         
+
         // Test connection to Monday.com
         function testConnection() {
     showLoading('connectionResult');
