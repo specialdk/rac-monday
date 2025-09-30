@@ -493,7 +493,18 @@ query {
                     mainBoards.push(board);
                 }
             });
+       
+            function filterBoardsByUser(boards, userId) {
+            if (!userId) return boards;
             
+            return boards.filter(board => {
+                const isOwner = board.owners && board.owners.some(owner => owner.id === userId);
+                const isSubscriber = board.subscribers && board.subscribers.some(sub => sub.id === userId);
+                return isOwner || isSubscriber;
+            });
+        }
+
+        
             return mainBoards.map(function(mainBoard) {
                 const relatedSubitems = subitemBoards.filter(function(subBoard) {
                     return subBoard.name === 'Subitems of ' + mainBoard.name;
@@ -566,7 +577,9 @@ query {
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        displayBoards(data.boards);
+                        // Filter to show only current user's boards
+                    const filteredBoards = filterBoardsByUser(data.boards, currentUser.id);
+                    displayBoards(filteredBoards);
                     } else {
                         document.getElementById('boardsResult').innerHTML = 
                             '<div class="status disconnected">❌ Error: ' + (data.error || 'Failed to get boards') + '</div>';
