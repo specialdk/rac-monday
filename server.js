@@ -517,9 +517,15 @@ query {
 
         // Get all boards
         function getBoards() {
-            showLoading('boardsResult');
-            
-            fetch('/api/boards')
+    showLoading('boardsResult');
+    
+    // Reset navigation to all users level
+    navigationState.level = 'all';
+    navigationState.userId = null;
+    navigationState.userLabel = null;
+    updateBreadcrumb();
+    
+    fetch('/api/boards')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
