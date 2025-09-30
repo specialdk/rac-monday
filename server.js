@@ -448,6 +448,39 @@ query {
             }
         }
         
+        function navigateToAll() {
+            console.log('🔄 Navigating to All Users view');
+            navigationState.level = 'all';
+            navigationState.userId = null;
+            navigationState.userLabel = null;
+            navigationState.projectId = null;
+            navigationState.projectName = null;
+            
+            updateBreadcrumb();
+        }
+
+        function navigateToUser() {
+            console.log('🔄 Navigating back to User view');
+            if (navigationState.userId) {
+                navigationState.level = 'user';
+                navigationState.projectId = null;
+                navigationState.projectName = null;
+                
+                updateBreadcrumb();
+            }
+        }
+
+        function navigateBack() {
+            if (navigationState.level === 'project') {
+                if (navigationState.userId) {
+                    navigateToUser();
+                } else {
+                    navigateToAll();
+                }
+            } else if (navigationState.level === 'user') {
+                navigateToAll();
+            }
+        }
 
         // Test connection to Monday.com
         function testConnection() {
