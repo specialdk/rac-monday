@@ -981,7 +981,6 @@ app.get("/api/boards", async (req, res) => {
                             state
                             column_values {
                                 id
-                                title
                                 type
                                 text
                                 value
