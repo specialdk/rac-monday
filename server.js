@@ -261,40 +261,6 @@ app.get("/", (req, res) => {
         <h1>📋 Monday.com API MCP Connection</h1>
         
         <!-- Connection Status -->
-
-        // Test connection to Monday.com
-        function testConnection() {
-    showLoading('connectionResult');
-    
-    fetch('/test-connection', { method: 'POST' })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.user) {
-                currentUser = data.user;
-                // Remove account references since we don't have that data
-                
-                document.getElementById('connectionResult').innerHTML = 
-                    '<div class="status connected">✅ Connection successful!</div>' +
-                    '<p><strong>User:</strong> ' + (data.user.name || 'Unknown') + ' (' + (data.user.email || 'No email') + ')</p>' +
-                    '<p><strong>User ID:</strong> ' + (data.user.id || 'Unknown') + '</p>';
-                        
-                        document.getElementById('connectionStatus').innerHTML = 
-                            '✅ Connected - Monday.com API ready';
-                        document.getElementById('connectionStatus').className = 'status connected';
-                        
-                        enableAllButtons();
-                        isConnected = true;
-                    } else {
-                        document.getElementById('connectionResult').innerHTML = 
-                            '<div class="status disconnected">❌ Connection failed: ' + (data.error || 'Unknown error') + '</div>';
-                    }
-                })
-                .catch(error => {
-                    document.getElementById('connectionResult').innerHTML = 
-                        '<div class="status disconnected">❌ Network Error: ' + error.message + '</div>';
-                });
-        }
-                
         <div class="section">
             <h3>🔗 Connection Status</h3>
             <div id="connectionStatus" class="status disconnected">
@@ -312,8 +278,6 @@ app.get("/", (req, res) => {
                 }</span></li>
             </ul>
         </div>
-
-         
 
         <div class="navigation-breadcrumb" id="navigationBreadcrumb">
             <div class="breadcrumb-item current" id="breadcrumbAll" onclick="navigateToAll()">
@@ -530,7 +494,15 @@ query {
                 }
             });
        
+            function filterBoardsByUser(boards, userId) {
+            if (!userId) return boards;
             
+            return boards.filter(board => {
+                const isOwner = board.owners && board.owners.some(owner => owner.id === userId);
+                const isSubscriber = board.subscribers && board.subscribers.some(sub => sub.id === userId);
+                return isOwner || isSubscriber;
+            });
+        }
 
         
             return mainBoards.map(function(mainBoard) {
@@ -557,17 +529,38 @@ query {
             });
         }
 
-        function filterBoardsByUser(boards, userId) {
-            if (!userId) return boards;
-            
-            return boards.filter(board => {
-                const isOwner = board.owners && board.owners.some(owner => owner.id === userId);
-                const isSubscriber = board.subscribers && board.subscribers.some(sub => sub.id === userId);
-                return isOwner || isSubscriber;
-            });
+        // Test connection to Monday.com
+        function testConnection() {
+    showLoading('connectionResult');
+    
+    fetch('/test-connection', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.user) {
+                currentUser = data.user;
+                // Remove account references since we don't have that data
+                
+                document.getElementById('connectionResult').innerHTML = 
+                    '<div class="status connected">✅ Connection successful!</div>' +
+                    '<p><strong>User:</strong> ' + (data.user.name || 'Unknown') + ' (' + (data.user.email || 'No email') + ')</p>' +
+                    '<p><strong>User ID:</strong> ' + (data.user.id || 'Unknown') + '</p>';
+                        
+                        document.getElementById('connectionStatus').innerHTML = 
+                            '✅ Connected - Monday.com API ready';
+                        document.getElementById('connectionStatus').className = 'status connected';
+                        
+                        enableAllButtons();
+                        isConnected = true;
+                    } else {
+                        document.getElementById('connectionResult').innerHTML = 
+                            '<div class="status disconnected">❌ Connection failed: ' + (data.error || 'Unknown error') + '</div>';
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('connectionResult').innerHTML = 
+                        '<div class="status disconnected">❌ Network Error: ' + error.message + '</div>';
+                });
         }
-
-       
 
         // Get all boards
         function getBoards() {
