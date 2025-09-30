@@ -222,6 +222,38 @@ app.get("/", (req, res) => {
         .tab-content.active {
             display: block;
         }
+        
+        /* Enhanced Navigation Styles */
+        .navigation-breadcrumb {
+            background: #e0f2fe;
+            border: 2px solid #0ea5e9;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            display: none;
+        }
+        .breadcrumb-item {
+            display: inline-block;
+            margin-right: 10px;
+            padding: 5px 10px;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #0ea5e9;
+            font-weight: bold;
+        }
+        .breadcrumb-item:hover {
+            background: #f0f9ff;
+        }
+        .breadcrumb-item.current {
+            background: #0ea5e9;
+            color: white;
+            cursor: default;
+        }
+        .breadcrumb-separator {
+            margin: 0 5px;
+            color: #64748b;
+        }
     </style>
 </head>
 <body>
@@ -245,6 +277,12 @@ app.get("/", (req, res) => {
                   MONDAY_CONFIG.apiToken ? "Configured" : "Not set"
                 }</span></li>
             </ul>
+        </div>
+
+        <div class="navigation-breadcrumb" id="navigationBreadcrumb">
+            <div class="breadcrumb-item current" id="breadcrumbAll" onclick="navigateToAll()">
+                👥 All Users
+            </div>
         </div>
 
         <!-- Authentication Test -->
