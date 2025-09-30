@@ -576,9 +576,17 @@ query {
 
         // Display boards in a nice format
         function displayBoards(boards) {
-            let html = '<h4>📋 Your Boards (' + boards.length + ')</h4>';
+            const nestedBoards = createNestedBoardStructure(boards);
             
-            boards.forEach(board => {
+            let html = '<h4>📋 Your Projects (' + nestedBoards.length + ' main boards)</h4>';
+            
+            if (nestedBoards.length === 0) {
+                html += '<p>No projects found.</p>';
+                document.getElementById('boardsResult').innerHTML = html;
+                return;
+            }
+            
+            nestedBoards.forEach(board => {
                 const itemCount = board.items ? board.items.length : 0;
                 const groupCount = board.groups ? board.groups.length : 0;
                 
@@ -588,21 +596,13 @@ query {
                 html += '</div>';
                 html += '<p><strong>Description:</strong> ' + (board.description || 'No description') + '</p>';
                 html += '<div class="board-stats">';
-                html += '<div class="stat">📝 ' + itemCount + ' items</div>';
+                html += '<div class="stat">📝 ' + board.totalItems + ' total items</div>';
                 html += '<div class="stat">📁 ' + groupCount + ' groups</div>';
                 html += '<div class="stat">🆔 ' + board.id + '</div>';
-                html += '</div>';
-                
-                if (board.items && board.items.length > 0) {
-                    html += '<h5>Recent Items:</h5>';
-                    board.items.slice(0, 3).forEach(item => {
-                        html += '<div class="item-row">';
-                        html += '<span>📝 ' + item.name + '</span>';
-                        html += '<span class="status-label status-working">Active</span>';
-                        html += '</div>';
-                    });
+                if (board.hasSubitems) {
+                    html += '<div class="stat">🔎 ' + board.subitems.length + ' subitems</div>';
                 }
-                
+                html += '</div>';
                 html += '</div>';
             });
             
