@@ -388,6 +388,16 @@ query {
         let isConnected = false;
         let currentUser = null;
 
+        // Enhanced navigation state
+        let navigationState = {
+            level: 'all', // 'all', 'user', 'project'
+            userId: null,
+            userLabel: null,
+            projectId: null,
+            projectName: null,
+            projectData: null
+        };
+        
         // Test connection to Monday.com
         function testConnection() {
     showLoading('connectionResult');
