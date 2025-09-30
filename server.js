@@ -482,6 +482,16 @@ query {
             }
         }
 
+          function filterBoardsByUser(boards, userId) {
+            if (!userId) return boards;
+            
+            return boards.filter(board => {
+                const isOwner = board.owners && board.owners.some(owner => owner.id === userId);
+                const isSubscriber = board.subscribers && board.subscribers.some(sub => sub.id === userId);
+                return isOwner || isSubscriber;
+            });
+        }
+
       function createNestedBoardStructure(boards) {
             const mainBoards = [];
             const subitemBoards = [];
@@ -494,16 +504,7 @@ query {
                 }
             });
        
-            function filterBoardsByUser(boards, userId) {
-            if (!userId) return boards;
             
-            return boards.filter(board => {
-                const isOwner = board.owners && board.owners.some(owner => owner.id === userId);
-                const isSubscriber = board.subscribers && board.subscribers.some(sub => sub.id === userId);
-                return isOwner || isSubscriber;
-            });
-        }
-
         
             return mainBoards.map(function(mainBoard) {
                 const relatedSubitems = subitemBoards.filter(function(subBoard) {
