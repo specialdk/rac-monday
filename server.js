@@ -254,6 +254,68 @@ app.get("/", (req, res) => {
             margin: 0 5px;
             color: #64748b;
         }
+        
+        .gantt-container {
+    margin: 20px 0;
+    overflow-x: auto;
+}
+.gantt-header {
+    display: flex;
+    background: #f8fafc;
+    padding: 10px;
+    border-bottom: 2px solid #cbd5e0;
+    font-weight: bold;
+}
+.gantt-row {
+    display: flex;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 10px;
+    align-items: center;
+}
+.gantt-row:hover {
+    background: #f7fafc;
+}
+.gantt-project-name {
+    width: 250px;
+    flex-shrink: 0;
+    font-weight: 500;
+}
+.gantt-timeline {
+    flex: 1;
+    position: relative;
+    height: 30px;
+    background: #f8fafc;
+    border-radius: 4px;
+}
+.gantt-bar {
+    position: absolute;
+    height: 20px;
+    top: 5px;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.gantt-bar-label {
+    position: absolute;
+    left: 5px;
+    top: 2px;
+    font-size: 11px;
+    color: white;
+    font-weight: 500;
+}
+.gantt-months {
+    display: flex;
+    margin-left: 250px;
+    border-top: 1px solid #cbd5e0;
+    padding-top: 5px;
+}
+.gantt-month {
+    flex: 1;
+    text-align: center;
+    font-size: 12px;
+    color: #64748b;
+}
+
     </style>
 </head>
 <body>
@@ -306,6 +368,7 @@ app.get("/", (req, res) => {
                 <button class="tab-button" onclick="showTab('analytics')">📈 Analytics</button>
             </div>
 
+
             <!-- Boards Tab -->
             <div id="boards-tab" class="tab-content active">
                 <div class="button-grid">
@@ -354,6 +417,15 @@ app.get("/", (req, res) => {
                 <div id="analyticsResult"></div>
             </div>
         </div>
+
+        <!-- Gantt Tab -->
+<div id="gantt-tab" class="tab-content">
+    <div class="button-grid">
+        <button onclick="showGanttChart()" id="btn-gantt">📊 Show Timeline</button>
+    </div>
+    <div id="ganttResult"></div>
+</div>
+
 
         <!-- Custom Queries -->
         <div class="section">
@@ -838,6 +910,114 @@ query {
                         '<div class="result">' + JSON.stringify(data, null, 2) + '</div>';
                 });
         }
+
+        // Show Gantt chart for filtered boards
+function showGanttChart() {
+    showLoading('ganttResult');
+    
+    fetch('/api/boards')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const filteredBoards = filterBoardsByUser(data.boards, currentUser.id);
+                displayGanttChart(filteredBoards);
+            }
+        });
+}
+
+function displayGanttChart(boards) {
+    // Extract all items with timeline data
+    let allItems = [];
+    
+    boards.forEach(board => {
+        const mainBoardName = board.name;
+        if (board.items_page && board.items_page.items) {
+            board.items_page.items.forEach(item => {
+                const timelineCol = item.column_values?.find(cv => cv.type === 'timeline');
+                if (timelineCol && timelineCol.value) {
+                    try {
+                        const timeline = JSON.parse(timelineCol.value);
+                        if (timeline.from && timeline.to) {
+                            allItems.push({
+                                boardName: mainBoardName,
+                                itemName: item.name,
+                                from: new Date(timeline.from),
+                                to: new Date(timeline.to)
+                            });
+                        }
+                    } catch (e) {
+                        console.log('Could not parse timeline for', item.name);
+                    }
+                }
+            });
+        }
+    });
+    
+    if (allItems.length === 0) {
+        document.getElementById('ganttResult').innerHTML = 
+            '<div class="status disconnected">No timeline data found. Add Timeline columns with dates in Monday.com.</div>';
+        return;
+    }
+    
+    // Calculate date range
+    const allDates = allItems.flatMap(item => [item.from, item.to]);
+    const minDate = new Date(Math.min(...allDates));
+    const maxDate = new Date(Math.max(...allDates));
+    
+    // Generate month labels
+    const months = [];
+    let current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    while (current <= maxDate) {
+        months.push(new Date(current));
+        current.setMonth(current.getMonth() + 1);
+    }
+    
+    const totalDays = (maxDate - minDate) / (1000 * 60 * 60 * 24);
+    
+    // Build Gantt HTML
+    let html = '<div class="gantt-container">';
+    html += '<h4>Timeline View (' + allItems.length + ' items with dates)</h4>';
+    
+    // Month headers
+    html += '<div class="gantt-months">';
+    months.forEach(month => {
+        html += '<div class="gantt-month">' + 
+                month.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) + 
+                '</div>';
+    });
+    html += '</div>';
+    
+    // Header
+    html += '<div class="gantt-header">';
+    html += '<div class="gantt-project-name">Project / Task</div>';
+    html += '<div class="gantt-timeline"></div>';
+    html += '</div>';
+    
+    // Rows
+    allItems.forEach(item => {
+        const startOffset = ((item.from - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+        const duration = ((item.to - item.from) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+        
+        html += '<div class="gantt-row">';
+        html += '<div class="gantt-project-name">' + item.itemName + 
+                '<br><small style="color: #64748b;">' + item.boardName + '</small></div>';
+        html += '<div class="gantt-timeline">';
+        html += '<div class="gantt-bar" style="left: ' + startOffset + '%; width: ' + duration + '%;">';
+        html += '<div class="gantt-bar-label">' + 
+                item.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' - ' +
+                item.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+                '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+    });
+    
+    html += '</div>';
+    
+    document.getElementById('ganttResult').innerHTML = html;
+}
+    
+
 
         // Tab functionality
         function showTab(tabName) {
