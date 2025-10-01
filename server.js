@@ -927,11 +927,14 @@ function showGanttChart() {
 }
 
 function displayGanttChart(boards) {
-    // Extract all items with timeline data
-    let allItems = [];
+    // Aggregate timeline data at BOARD level
+    let boardTimelines = [];
     
     boards.forEach(board => {
-        const mainBoardName = board.name;
+        let boardStartDates = [];
+        let boardEndDates = [];
+        let itemsWithTimelines = [];
+        
         if (board.items_page && board.items_page.items) {
             board.items_page.items.forEach(item => {
                 const timelineCol = item.column_values?.find(cv => cv.type === 'timeline');
@@ -939,29 +942,43 @@ function displayGanttChart(boards) {
                     try {
                         const timeline = JSON.parse(timelineCol.value);
                         if (timeline.from && timeline.to) {
-                            allItems.push({
-                                boardName: mainBoardName,
-                                itemName: item.name,
+                            boardStartDates.push(new Date(timeline.from));
+                            boardEndDates.push(new Date(timeline.to));
+                            itemsWithTimelines.push({
+                                name: item.name,
                                 from: new Date(timeline.from),
                                 to: new Date(timeline.to)
                             });
                         }
                     } catch (e) {
-                        console.log('Could not parse timeline for', item.name);
+                        // Skip invalid timeline data
                     }
                 }
             });
         }
+        
+        // If board has any timeline data, use earliest start and latest end
+        if (boardStartDates.length > 0 && boardEndDates.length > 0) {
+            boardTimelines.push({
+                boardId: board.id,
+                boardName: board.name,
+                from: new Date(Math.min(...boardStartDates)),
+                to: new Date(Math.max(...boardEndDates)),
+                itemCount: board.items_page?.items?.length || 0,
+                timelineItemCount: itemsWithTimelines.length,
+                items: itemsWithTimelines
+            });
+        }
     });
     
-    if (allItems.length === 0) {
+    if (boardTimelines.length === 0) {
         document.getElementById('ganttResult').innerHTML = 
-            '<div class="status disconnected">No timeline data found. Add Timeline columns with dates in Monday.com.</div>';
+            '<div class="status disconnected">No timeline data found in your projects. Add Timeline columns with dates in Monday.com.</div>';
         return;
     }
     
-    // Calculate date range
-    const allDates = allItems.flatMap(item => [item.from, item.to]);
+    // Calculate overall date range
+    const allDates = boardTimelines.flatMap(board => [board.from, board.to]);
     const minDate = new Date(Math.min(...allDates));
     const maxDate = new Date(Math.max(...allDates));
     
@@ -977,7 +994,7 @@ function displayGanttChart(boards) {
     
     // Build Gantt HTML
     let html = '<div class="gantt-container">';
-    html += '<h4>Timeline View (' + allItems.length + ' items with dates)</h4>';
+    html += '<h4>Project Timeline Overview (' + boardTimelines.length + ' projects)</h4>';
     
     // Month headers
     html += '<div class="gantt-months">';
@@ -990,32 +1007,66 @@ function displayGanttChart(boards) {
     
     // Header
     html += '<div class="gantt-header">';
-    html += '<div class="gantt-project-name">Project / Task</div>';
+    html += '<div class="gantt-project-name">Project</div>';
     html += '<div class="gantt-timeline"></div>';
     html += '</div>';
     
-    // Rows
-    allItems.forEach(item => {
-        const startOffset = ((item.from - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
-        const duration = ((item.to - item.from) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+    // Rows - one per board
+    boardTimelines.forEach(board => {
+        const startOffset = ((board.from - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+        const duration = ((board.to - board.from) / (1000 * 60 * 60 * 24)) / totalDays * 100;
         
         html += '<div class="gantt-row">';
-        html += '<div class="gantt-project-name">' + item.itemName + 
-                '<br><small style="color: #64748b;">' + item.boardName + '</small></div>';
+        html += '<div class="gantt-project-name">';
+        html += '<span style="cursor: pointer; color: #FF5722;" onclick="toggleProjectItems(\'' + board.boardId + '\')">';
+        html += '▶ ' + board.boardName + '</span>';
+        html += '<br><small style="color: #64748b;">' + board.timelineItemCount + ' items with timelines</small>';
+        html += '</div>';
         html += '<div class="gantt-timeline">';
         html += '<div class="gantt-bar" style="left: ' + startOffset + '%; width: ' + duration + '%;">';
         html += '<div class="gantt-bar-label">' + 
-                item.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' - ' +
-                item.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+                board.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' - ' +
+                board.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
                 '</div>';
         html += '</div>';
         html += '</div>';
+        html += '</div>';
+        
+        // Hidden item-level details
+        html += '<div id="items-' + board.boardId + '" style="display: none; background: #f8fafc; padding-left: 30px;">';
+        board.items.forEach(item => {
+            const itemStartOffset = ((item.from - minDate) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+            const itemDuration = ((item.to - item.from) / (1000 * 60 * 60 * 24)) / totalDays * 100;
+            
+            html += '<div class="gantt-row" style="border-top: 1px solid #e2e8f0;">';
+            html += '<div class="gantt-project-name" style="padding-left: 20px; font-size: 13px;">' + item.name + '</div>';
+            html += '<div class="gantt-timeline">';
+            html += '<div class="gantt-bar" style="left: ' + itemStartOffset + '%; width: ' + itemDuration + '%; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);">';
+            html += '<div class="gantt-bar-label">' + 
+                    item.from.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ' - ' +
+                    item.to.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+                    '</div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+        });
         html += '</div>';
     });
     
     html += '</div>';
     
     document.getElementById('ganttResult').innerHTML = html;
+}
+
+// Toggle function to show/hide item-level details
+function toggleProjectItems(boardId) {
+    const itemsDiv = document.getElementById('items-' + boardId);
+    const isVisible = itemsDiv.style.display !== 'none';
+    itemsDiv.style.display = isVisible ? 'none' : 'block';
+    
+    // Update arrow
+    const arrow = event.target;
+    arrow.textContent = isVisible ? '▶ ' + arrow.textContent.substring(2) : '▼ ' + arrow.textContent.substring(2);
 }
 
 
