@@ -362,6 +362,7 @@ app.get("/", (req, res) => {
             <!-- Tab Navigation -->
             <div>
                 <button class="tab-button active" onclick="showTab('boards')">📋 Boards</button>
+                <button class="tab-button" onclick="showTab('gantt')">📊 Gantt Chart</button>
                 <button class="tab-button" onclick="showTab('items')">📝 Items</button>
                 <button class="tab-button" onclick="showTab('users')">👥 Users</button>
                 <button class="tab-button" onclick="showTab('updates')">💬 Updates</button>
@@ -1016,7 +1017,7 @@ function displayGanttChart(boards) {
     
     document.getElementById('ganttResult').innerHTML = html;
 }
-    
+
 
 
         // Tab functionality
