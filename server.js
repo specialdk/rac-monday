@@ -1018,8 +1018,8 @@ function displayGanttChart(boards) {
         
         html += '<div class="gantt-row">';
         html += '<div class="gantt-project-name">';
-        html += '<span style="cursor: pointer; color: #FF5722;" onclick="toggleProjectItems(\'' + board.boardId + '\')">';
-        html += '▶ ' + board.boardName + '</span>';
+        html += '<span style="cursor: pointer; color: #FF5722;" onclick="toggleProjectItems(' + board.boardId + ')">';
+        html += '&#9654; ' + board.boardName + '</span>';
         html += '<br><small style="color: #64748b;">' + board.timelineItemCount + ' items with timelines</small>';
         html += '</div>';
         html += '<div class="gantt-timeline">';
@@ -1057,6 +1057,14 @@ function displayGanttChart(boards) {
     
     document.getElementById('ganttResult').innerHTML = html;
 }
+
+// Toggle function to show/hide item-level details
+function toggleProjectItems(boardId) {
+    const itemsDiv = document.getElementById('items-' + boardId);
+    const isVisible = itemsDiv.style.display !== 'none';
+    itemsDiv.style.display = isVisible ? 'none' : 'block';
+}
+    
 
 // Toggle function to show/hide item-level details
 function toggleProjectItems(boardId) {
