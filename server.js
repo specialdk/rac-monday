@@ -362,11 +362,11 @@ app.get("/", (req, res) => {
             <!-- Tab Navigation -->
             <div>
                 <button class="tab-button active" onclick="showTab('boards')">📋 Boards</button>
-                <button class="tab-button" onclick="showTab('gantt')">📊 Gantt Chart</button>
                 <button class="tab-button" onclick="showTab('items')">📝 Items</button>
                 <button class="tab-button" onclick="showTab('users')">👥 Users</button>
                 <button class="tab-button" onclick="showTab('updates')">💬 Updates</button>
                 <button class="tab-button" onclick="showTab('analytics')">📈 Analytics</button>
+                <button class="tab-button" onclick="showTab('gantt')">📊 Gantt Chart</button>
             </div>
 
 
