@@ -255,10 +255,19 @@ app.get("/", (req, res) => {
             color: #64748b;
         }
         
-        .gantt-container {
+       .gantt-container {
     margin: 20px 0;
     overflow-x: auto;
 }
+
+.gantt-fullwidth {
+    margin-left: -30px;
+    margin-right: -30px;
+    padding: 0 20px;
+    width: calc(100vw - 40px);
+    max-width: none;
+}
+
 .gantt-header {
     display: flex;
     background: #f8fafc;
@@ -928,7 +937,7 @@ function showGanttChart() {
 
 function displayGanttChart(boards) {
     // Aggregate timeline data at BOARD level
-    let boardTimelines = [];
+    let html = '<div class="gantt-container gantt-fullwidth">';
     
     boards.forEach(board => {
         let boardStartDates = [];
@@ -1064,7 +1073,7 @@ function toggleProjectItems(boardId) {
     const isVisible = itemsDiv.style.display !== 'none';
     itemsDiv.style.display = isVisible ? 'none' : 'block';
 }
-    
+
 
 // Toggle function to show/hide item-level details
 function toggleProjectItems(boardId) {
