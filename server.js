@@ -90,12 +90,13 @@ app.get("/", (req, res) => {
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 1200px;
+            max-width: 1800px;
             margin: 0 auto;
             padding: 20px;
             background: linear-gradient(135deg, #FF5722 0%, #FF7043 100%);
             min-height: 100vh;
         }
+
         .container {
             background: white;
             border-radius: 12px;
@@ -327,7 +328,7 @@ app.get("/", (req, res) => {
 .gantt-row {
     min-width: 1400px; /* Force wider minimum width */
 }
-    
+
     </style>
 </head>
 <body>
