@@ -316,6 +316,18 @@ app.get("/", (req, res) => {
     color: #64748b;
 }
 
+.gantt-container {
+    margin: 20px -30px; /* Break out of container padding */
+    padding: 0 20px;
+    overflow-x: auto;
+}
+
+.gantt-months,
+.gantt-header,
+.gantt-row {
+    min-width: 1400px; /* Force wider minimum width */
+}
+    
     </style>
 </head>
 <body>
