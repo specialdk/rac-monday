@@ -90,7 +90,7 @@ app.get("/", (req, res) => {
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            max-width: 1800px;
+            max-width: 2400px;
             margin: 0 auto;
             padding: 20px;
             background: linear-gradient(135deg, #FF5722 0%, #FF7043 100%);
